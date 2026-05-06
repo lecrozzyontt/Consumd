@@ -11,6 +11,14 @@
   z-index: 200;
 }
 
+/* Only apply notch/status bar spacing when installed as an app (PWA) */
+@media (display-mode: standalone), (display-mode: fullscreen) {
+  .navbar {
+    height: calc(var(--nav-height) + env(safe-area-inset-top, 0px));
+    padding-top: env(safe-area-inset-top, 0px);
+  }
+}
+
 .navbar-inner {
   max-width: 1320px;
   height: 100%;
