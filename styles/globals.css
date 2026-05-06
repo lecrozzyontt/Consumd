@@ -109,6 +109,13 @@ h1, h2, h3 {
   padding-top: var(--nav-height);
 }
 
+/* Adjust the main content padding when installed as an app */
+@media (display-mode: standalone), (display-mode: fullscreen) {
+  .main-content {
+    padding-top: calc(var(--nav-height) + env(safe-area-inset-top, 0px));
+  }
+}
+
 /* ============================================================
    SHARED UTILITIES
    ============================================================ */
@@ -116,6 +123,13 @@ h1, h2, h3 {
   max-width: 1320px;
   margin: 0 auto;
   padding: 2.5rem 2rem 5rem;
+}
+
+/* Adjust bottom padding for the home indicator when installed as an app */
+@media (display-mode: standalone), (display-mode: fullscreen) {
+  .page-wrapper {
+    padding-bottom: calc(5rem + env(safe-area-inset-bottom, 0px));
+  }
 }
 
 .page-title {
