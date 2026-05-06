@@ -15,7 +15,10 @@ export function useOnFocus(callback) {
   useEffect(() => {
     const handle = () => {
       if (document.visibilityState === 'visible') {
-        savedCallback.current();
+        // Add a 150ms delay to let the browser network stack wake up
+        setTimeout(() => {
+          if (savedCallback.current) savedCallback.current();
+        }, 150);
       }
     };
     document.addEventListener('visibilitychange', handle);

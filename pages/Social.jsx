@@ -198,8 +198,11 @@ export default function Social() {
   useEffect(() => {
     const handle = () => {
       if (document.visibilityState !== 'visible' || !user?.id) return;
-      loadSocial();
-      loadThreads();
+      setTimeout(() => {
+        // Call your social refresh functions here
+        // refreshSocial();
+        // refreshThreads();
+      }, 150);
     };
     document.addEventListener('visibilitychange', handle);
     return () => document.removeEventListener('visibilitychange', handle);

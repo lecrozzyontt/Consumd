@@ -58,15 +58,20 @@ export default function Profile() {
   }, [profile?.id]);
 
   // On tab/app resume, refresh silently — cache means no spinner
+  // ...existing code...
+  // On tab/app resume, refresh silently — cache means no spinner
   useEffect(() => {
     const handle = () => {
-      if (document.visibilityState === 'visible' && profile) loadProfileData();
+      if (document.visibilityState === 'visible' && profile) {
+        setTimeout(() => loadProfileData(), 150);
+      }
     };
     document.addEventListener('visibilitychange', handle);
     return () => document.removeEventListener('visibilitychange', handle);
   }, [profile?.id]);
 
   async function loadProfileData() {
+// ...existing code...
     // Only show spinner if no cached data
     if (!cacheGet('profile:' + profile.id)) setLoading(true);
     try {

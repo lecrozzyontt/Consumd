@@ -36,8 +36,11 @@ export default function Home() {
   useEffect(() => {
     const handle = () => {
       if (document.visibilityState !== 'visible') return;
-      loadMedia();
-      if (user?.id) loadFriendsFeed(user.id);
+      
+      setTimeout(() => {
+        loadMedia();
+        if (user?.id) loadFriendsFeed(user.id);
+      }, 150);
     };
     document.addEventListener('visibilitychange', handle);
     return () => document.removeEventListener('visibilitychange', handle);
