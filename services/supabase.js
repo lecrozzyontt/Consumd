@@ -14,3 +14,18 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     lock: async (name, acquireTimeout, fn) => fn(),
   }
 });
+
+// Globally pause Supabase auth timers when the tab sleeps, 
+// and jumpstart them when the tab wakes up. 
+// This prevents ALL app-wide database fetches from hanging.
+if (typeof document !== 'undefined') {
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') {
+      supabase.auth.startAutoRefresh();
+      // Force a fast wakeup call so pending fetches can resolve
+      setTimeout(() => supabase.auth.getSession(), 100);
+    } else {
+      supabase.auth.stopAutoRefresh();
+    }
+  });
+}

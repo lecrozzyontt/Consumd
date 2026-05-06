@@ -436,6 +436,24 @@ export default function Social() {
       };
     }));
   }
+
+  // Restore the missing async function declaration here:
+  async function postThread() {
+    if (!newThreadText.trim() || postingThread) return;
+    setPostingThread(true);
+    const { error } = await supabase.from('threads').insert({
+      user_id: user.id,
+      content: newThreadText.trim(),
+      likes_count: 0,
+    });
+    if (!error) {
+      setNewThreadText('');
+      await loadThreads();
+    }
+    setPostingThread(false);
+  }
+
+  async function likeThread(threadId, currentlyLiked) {
     if (!newThreadText.trim() || postingThread) return;
     setPostingThread(true);
     const { error } = await supabase.from('threads').insert({
