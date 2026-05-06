@@ -106,14 +106,8 @@ h1, h2, h3 {
   flex: 1;
   width: 100%;
   overflow-y: auto;
-  padding-top: var(--nav-height);
-}
-
-/* Adjust the main content padding when installed as an app */
-@media (display-mode: standalone), (display-mode: fullscreen) {
-  .main-content {
-    padding-top: calc(var(--nav-height) + env(safe-area-inset-top, 0px));
-  }
+  /* Apply safe area directly here */
+  padding-top: calc(var(--nav-height) + env(safe-area-inset-top, 0px));
 }
 
 /* ============================================================
@@ -122,7 +116,8 @@ h1, h2, h3 {
 .page-wrapper {
   max-width: 1320px;
   margin: 0 auto;
-  padding: 2.5rem 2rem 5rem;
+  /* Apply safe area directly to the bottom padding (the 3rd value) */
+  padding: 2.5rem 2rem calc(5rem + env(safe-area-inset-bottom, 0px));
 }
 
 /* Adjust bottom padding for the home indicator when installed as an app */

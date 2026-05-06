@@ -3,20 +3,14 @@
   top: 0;
   left: 0;
   right: 0;
-  height: var(--nav-height);
-  background: rgba(19, 30, 50, 0.95); /* Matches the new vibrant dark slate-blue --bg */
+  /* Apply the safe area inset directly */
+  height: calc(var(--nav-height) + env(safe-area-inset-top, 0px));
+  padding-top: env(safe-area-inset-top, 0px);
+  background: rgba(19, 30, 50, 0.95);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
   border-bottom: 1px solid var(--border);
   z-index: 200;
-}
-
-/* Only apply notch/status bar spacing when installed as an app (PWA) */
-@media (display-mode: standalone), (display-mode: fullscreen) {
-  .navbar {
-    height: calc(var(--nav-height) + env(safe-area-inset-top, 0px));
-    padding-top: env(safe-area-inset-top, 0px);
-  }
 }
 
 .navbar-inner {
