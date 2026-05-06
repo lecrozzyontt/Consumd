@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { supabase } from '../services/supabase';
 import { useAuth } from '../context/AuthContext';
 import { invalidateProfile } from '../services/profileCache';
-import { useOnFocus } from '../services/useOnFocus';
+import { cacheGet, cacheSet } from '../services/dataCache';
 import RatingStars from '../components/RatingStars';
 import ReviewInteractions from '../components/ReviewInteractions';
 import Avatar from '../components/Avatar';
@@ -26,12 +26,15 @@ const TABS = [
 
 export default function Profile() {
   const { profile, updateProfile } = useAuth();
-  const [logs, setLogs]             = useState([]);
-  const [stats, setStats]           = useState(null);
-  const [top4, setTop4]             = useState([]);
-  const [recent, setRecent]         = useState([]);
+
+  const profileCache = () => profile?.id ? cacheGet('profile:' + profile.id) : null;
+
+  const [logs, setLogs]             = useState(() => profileCache()?.logs   || []);
+  const [stats, setStats]           = useState(() => profileCache()?.stats  || null);
+  const [top4, setTop4]             = useState(() => profileCache()?.top4   || []);
+  const [recent, setRecent]         = useState(() => profileCache()?.recent || []);
   const [activeTab, setActiveTab]   = useState('completed');
-  const [loading, setLoading]       = useState(true);
+  const [loading, setLoading]       = useState(!profileCache());
   const [deletingId, setDeletingId] = useState(null);
 
   const [editingBio, setEditingBio] = useState(false);
@@ -54,13 +57,18 @@ export default function Profile() {
     }
   }, [profile?.id]);
 
-  // Re-fetch logs when returning to the app from background — silently
-  useOnFocus(() => {
-    if (profile) refreshProfileData();
-  });
+  // On tab/app resume, refresh silently — cache means no spinner
+  useEffect(() => {
+    const handle = () => {
+      if (document.visibilityState === 'visible' && profile) loadProfileData();
+    };
+    document.addEventListener('visibilitychange', handle);
+    return () => document.removeEventListener('visibilitychange', handle);
+  }, [profile?.id]);
 
   async function loadProfileData() {
-    setLoading(true);
+    // Only show spinner if no cached data
+    if (!cacheGet('profile:' + profile.id)) setLoading(true);
     try {
       await fetchProfileData();
     } catch (e) {
@@ -68,12 +76,6 @@ export default function Profile() {
     } finally {
       setLoading(false);
     }
-  }
-
-  // Silent version — no loading state, used by useOnFocus so existing
-  // content stays visible while data refreshes in the background.
-  async function refreshProfileData() {
-    try { await fetchProfileData(); } catch (e) { console.error(e); }
   }
 
   async function fetchProfileData() {
@@ -84,28 +86,29 @@ export default function Profile() {
       .order('logged_at', { ascending: false });
 
     const allLogs = data || [];
-    setLogs(allLogs);
-    setRecent(allLogs.slice(0, 10));
-
     const storedIds = profile.top4_ids || [];
     const resolved = storedIds.map(id => allLogs.find(l => l.id === id)).filter(Boolean);
-    setTop4(resolved);
+    const recentLogs = allLogs.slice(0, 10);
 
     const completedLogs = allLogs.filter(l => l.status === 'completed');
     const byType = completedLogs.reduce((acc, l) => {
-      const bucket = (l.media_type === 'season' || l.media_type === 'episode')
-        ? 'show'
-        : l.media_type;
+      const bucket = (l.media_type === 'season' || l.media_type === 'episode') ? 'show' : l.media_type;
       acc[bucket] = (acc[bucket] || 0) + 1;
       return acc;
     }, {});
-    setStats({
+    const newStats = {
       total: completedLogs.length,
       movie: byType.movie || 0,
       show:  byType.show  || 0,
       book:  byType.book  || 0,
       game:  byType.game  || 0,
-    });
+    };
+
+    setLogs(allLogs);
+    setRecent(recentLogs);
+    setTop4(resolved);
+    setStats(newStats);
+    cacheSet('profile:' + profile.id, { logs: allLogs, recent: recentLogs, top4: resolved, stats: newStats });
   }
 
   const deleteLog = async (id) => {

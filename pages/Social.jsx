@@ -1,9 +1,9 @@
 import { useState, useEffect, useRef } from 'react';
-import { useOnFocus } from '../services/useOnFocus';
 import { Link, useNavigate } from 'react-router-dom';
 import { supabase } from '../services/supabase';
 import { useAuth } from '../context/AuthContext';
 import { primeProfile } from '../services/profileCache';
+import { cacheGet, cacheSet } from '../services/dataCache';
 import SearchBar from '../components/SearchBar';
 import Avatar from '../components/Avatar';
 import './Social.css';
@@ -177,15 +177,15 @@ export default function Social() {
   const [searchQuery, setSearchQuery]     = useState('');
   const [searchResults, setSearchResults] = useState([]);
   const [threadSearch, setThreadSearch]   = useState([]);
-  const [requests, setRequests]           = useState([]);
-  const [friends, setFriends]             = useState([]);
-  const [groupChats, setGroupChats]       = useState([]);
-  const [outgoing, setOutgoing]           = useState([]);
-  const [loadingMessages, setLoadingMessages] = useState(true);
+  const [requests, setRequests]           = useState(() => cacheGet('social:friends')?.requests   || []);
+  const [friends, setFriends]             = useState(() => cacheGet('social:friends')?.friends    || []);
+  const [groupChats, setGroupChats]       = useState(() => cacheGet('social:friends')?.groupChats || []);
+  const [outgoing, setOutgoing]           = useState(() => cacheGet('social:friends')?.outgoing   || []);
+  const [loadingMessages, setLoadingMessages] = useState(!cacheGet('social:friends'));
 
   // ── Threads state ──
-  const [threads, setThreads]             = useState([]);
-  const [loadingThreads, setLoadingThreads] = useState(true);
+  const [threads, setThreads]             = useState(() => cacheGet('social:threads') || []);
+  const [loadingThreads, setLoadingThreads] = useState(!cacheGet('social:threads'));
   const [newThreadText, setNewThreadText] = useState('');
   const [postingThread, setPostingThread] = useState(false);
 
@@ -194,16 +194,20 @@ export default function Social() {
 
   useEffect(() => { if (user?.id) { loadSocial(); loadThreads(); } }, [user?.id]);
 
-  // Silent refresh on tab focus — no loading spinners, existing content stays visible
-  useOnFocus(() => {
-    if (!user?.id) return;
-    refreshSocial();
-    refreshThreads();
-  });
+  // On tab/app resume, refresh — cache means no spinner shown
+  useEffect(() => {
+    const handle = () => {
+      if (document.visibilityState !== 'visible' || !user?.id) return;
+      loadSocial();
+      loadThreads();
+    };
+    document.addEventListener('visibilitychange', handle);
+    return () => document.removeEventListener('visibilitychange', handle);
+  }, [user?.id]);
 
   // ─── Social / messages ───────────────────
   async function loadSocial() {
-    setLoadingMessages(true);
+    if (!cacheGet('social:friends')) setLoadingMessages(true);
     try {
       const { data: all } = await supabase
         .from('friendships')
@@ -237,6 +241,13 @@ export default function Social() {
       } else {
         setGroupChats([]);
       }
+      // Save to cache after all state is set
+      cacheSet('social:friends', {
+        requests: requests,
+        friends:  friends,
+        outgoing: outgoing,
+        groupChats: groupChats,
+      });
     } catch (e) { console.error(e); }
     finally { setLoadingMessages(false); }
   }
@@ -281,7 +292,7 @@ export default function Social() {
 
   // ─── Threads ─────────────────────────────
   async function loadThreads() {
-    setLoadingThreads(true);
+    if (!cacheGet('social:threads')) setLoadingThreads(true);
     try {
       // Fetch threads ordered by likes desc (no FK join)
       const { data: threadRows } = await supabase
@@ -340,7 +351,7 @@ export default function Social() {
         });
       });
 
-      setThreads(threadRows.map(t => {
+      const mapped = threadRows.map(t => {
         const prof = profileMap[t.user_id] || {};
         return {
           ...t,
@@ -349,7 +360,9 @@ export default function Social() {
           liked_by_me: likedSet.has(t.id),
           comments:    commentsByThread[t.id] || [],
         };
-      }));
+      });
+      setThreads(mapped);
+      cacheSet('social:threads', mapped);
     } catch (e) { console.error(e); }
     finally { setLoadingThreads(false); }
   }

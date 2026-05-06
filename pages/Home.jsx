@@ -5,144 +5,123 @@ import { supabase } from '../services/supabase';
 import { fetchTrendingMovies, fetchTrendingShows } from '../services/tmdb';
 import { fetchTrendingGames } from '../services/rawg';
 import { fetchTrendingBooks } from '../services/openLibrary';
-import { useOnFocus } from '../services/useOnFocus';
+import { cacheGet, cacheSet } from '../services/dataCache';
 import CategoryRow from '../components/CategoryRow';
 import ActivityCard from '../components/ActivityCard';
 import './Home.css';
 
 export default function Home() {
-  // ── Pull user + profile from context (no extra network calls needed) ──
   const { profile, user } = useAuth();
   const navigate = useNavigate();
 
-  const [trendingMovies, setTrendingMovies] = useState([]);
-  const [trendingShows, setTrendingShows]   = useState([]);
-  const [trendingBooks, setTrendingBooks]   = useState([]);
-  const [trendingGames, setTrendingGames]   = useState([]);
-  const [friendsActivity, setFriendsActivity]     = useState([]);
-  const [friendsInProgress, setFriendsInProgress] = useState([]);
-  const [loadingMedia, setLoadingMedia] = useState(true);
-  const [loadingFeed, setLoadingFeed]   = useState(true);
+  const [trendingMovies, setTrendingMovies] = useState(() => cacheGet('home:media')?.movies || []);
+  const [trendingShows, setTrendingShows]   = useState(() => cacheGet('home:media')?.shows  || []);
+  const [trendingBooks, setTrendingBooks]   = useState(() => cacheGet('home:media')?.books  || []);
+  const [trendingGames, setTrendingGames]   = useState(() => cacheGet('home:media')?.games  || []);
+  const [friendsActivity, setFriendsActivity]     = useState(() => cacheGet('home:feed')?.completed   || []);
+  const [friendsInProgress, setFriendsInProgress] = useState(() => cacheGet('home:feed')?.inProgress || []);
 
-  // Trending media doesn't need auth — load immediately on mount
-  useEffect(() => {
-    loadMedia();
-  }, []);
+  // Only show spinner if no cached data exists
+  const [loadingMedia, setLoadingMedia] = useState(!cacheGet('home:media'));
+  const [loadingFeed, setLoadingFeed]   = useState(!cacheGet('home:feed'));
 
-  // Friends feed DOES need auth — wait until we have a confirmed user ID.
-  // On a first-install PWA launch (no refresh), AuthContext.initSession()
-  // is async, so user starts as null. This effect re-runs once it resolves.
+  useEffect(() => { loadMedia(); }, []);
+
   useEffect(() => {
     if (!user?.id) return;
     loadFriendsFeed(user.id);
   }, [user?.id]);
 
-  // Re-fetch on tab focus — silent (no spinner, existing content stays visible)
-  useOnFocus(() => {
-    refreshMedia();
-    if (user?.id) refreshFriendsFeed(user.id);
-  });
+  // On tab/app resume, refresh silently — cache guarantees no spinner
+  useEffect(() => {
+    const handle = () => {
+      if (document.visibilityState !== 'visible') return;
+      loadMedia();
+      if (user?.id) loadFriendsFeed(user.id);
+    };
+    document.addEventListener('visibilitychange', handle);
+    return () => document.removeEventListener('visibilitychange', handle);
+  }, [user?.id]);
 
   async function loadMedia() {
-    setLoadingMedia(true);
+    // Show spinner only on first load (no cache)
+    if (!cacheGet('home:media')) setLoadingMedia(true);
     try {
-      await fetchMediaData();
+      const [movies, shows, books, games] = await Promise.all([
+        fetchTrendingMovies(),
+        fetchTrendingShows(),
+        fetchTrendingBooks(),
+        fetchTrendingGames(),
+      ]);
+      setTrendingMovies(movies);
+      setTrendingShows(shows);
+      setTrendingBooks(books);
+      setTrendingGames(games);
+      cacheSet('home:media', { movies, shows, books, games });
+    } catch (e) {
+      console.error(e);
     } finally {
       setLoadingMedia(false);
     }
   }
 
-  // Silent version — no loading state, used by useOnFocus
-  async function refreshMedia() {
-    try { await fetchMediaData(); } catch (e) { console.error(e); }
-  }
-
-  async function fetchMediaData() {
-    const [movies, shows, books, games] = await Promise.all([
-      fetchTrendingMovies(),
-      fetchTrendingShows(),
-      fetchTrendingBooks(),
-      fetchTrendingGames(),
-    ]);
-    setTrendingMovies(movies);
-    setTrendingShows(shows);
-    setTrendingBooks(books);
-    setTrendingGames(games);
-  }
-
   async function loadFriendsFeed(userId) {
-    setLoadingFeed(true);
+    if (!cacheGet('home:feed')) setLoadingFeed(true);
     try {
-      await fetchFeedData(userId);
+      const { data: friendships } = await supabase
+        .from('friendships')
+        .select('requester_id, addressee_id')
+        .eq('status', 'accepted')
+        .or(`requester_id.eq.${userId},addressee_id.eq.${userId}`);
+
+      const friendIds = (friendships || []).map(f =>
+        f.requester_id === userId ? f.addressee_id : f.requester_id
+      );
+
+      if (friendIds.length === 0) {
+        setFriendsActivity([]);
+        setFriendsInProgress([]);
+        cacheSet('home:feed', { completed: [], inProgress: [] });
+        return;
+      }
+
+      const [{ data: completedLogs }, { data: inProgressLogs }] = await Promise.all([
+        supabase
+          .from('logs')
+          .select('id, title, media_type, cover_url, rating, review, status, logged_at, user_id')
+          .in('user_id', friendIds).eq('status', 'completed')
+          .order('logged_at', { ascending: false }).limit(20),
+        supabase
+          .from('logs')
+          .select('id, title, media_type, cover_url, rating, review, status, logged_at, user_id')
+          .in('user_id', friendIds).eq('status', 'in_progress')
+          .order('logged_at', { ascending: false }).limit(20),
+      ]);
+
+      const allLogs = [...(completedLogs || []), ...(inProgressLogs || [])];
+      if (allLogs.length === 0) {
+        setFriendsActivity([]);
+        setFriendsInProgress([]);
+        cacheSet('home:feed', { completed: [], inProgress: [] });
+        return;
+      }
+
+      const userIds = [...new Set(allLogs.map(l => l.user_id))];
+      const { data: profiles } = await supabase
+        .from('profiles').select('id, username').in('id', userIds);
+      const profileMap = Object.fromEntries((profiles || []).map(p => [p.id, p.username]));
+
+      const completed   = (completedLogs  || []).map(l => ({ ...l, username: profileMap[l.user_id] || 'Unknown' }));
+      const inProgress  = (inProgressLogs || []).map(l => ({ ...l, username: profileMap[l.user_id] || 'Unknown' }));
+
+      setFriendsActivity(completed);
+      setFriendsInProgress(inProgress);
+      cacheSet('home:feed', { completed, inProgress });
     } catch (e) {
       console.error(e);
     } finally {
       setLoadingFeed(false);
     }
-  }
-
-  // Silent version — no loading state, used by useOnFocus
-  async function refreshFriendsFeed(userId) {
-    try { await fetchFeedData(userId); } catch (e) { console.error(e); }
-  }
-
-  async function fetchFeedData(userId) {
-    const { data: friendships } = await supabase
-      .from('friendships')
-      .select('requester_id, addressee_id')
-      .eq('status', 'accepted')
-      .or(`requester_id.eq.${userId},addressee_id.eq.${userId}`);
-
-    const friendIds = (friendships || []).map(f =>
-      f.requester_id === userId ? f.addressee_id : f.requester_id
-    );
-
-    if (friendIds.length === 0) {
-      setFriendsActivity([]);
-      setFriendsInProgress([]);
-      return;
-    }
-
-    const [{ data: completedLogs }, { data: inProgressLogs }] = await Promise.all([
-      supabase
-        .from('logs')
-        .select('id, title, media_type, cover_url, rating, review, status, logged_at, user_id')
-        .in('user_id', friendIds)
-        .eq('status', 'completed')
-        .order('logged_at', { ascending: false })
-        .limit(20),
-      supabase
-        .from('logs')
-        .select('id, title, media_type, cover_url, rating, review, status, logged_at, user_id')
-        .in('user_id', friendIds)
-        .eq('status', 'in_progress')
-        .order('logged_at', { ascending: false })
-        .limit(20),
-    ]);
-
-    const allLogs = [...(completedLogs || []), ...(inProgressLogs || [])];
-    if (allLogs.length === 0) {
-      setFriendsActivity([]);
-      setFriendsInProgress([]);
-      return;
-    }
-
-    const userIds = [...new Set(allLogs.map(l => l.user_id))];
-    const { data: profiles } = await supabase
-      .from('profiles')
-      .select('id, username')
-      .in('id', userIds);
-
-    const profileMap = Object.fromEntries((profiles || []).map(p => [p.id, p.username]));
-
-    setFriendsActivity((completedLogs || []).map(log => ({
-      ...log,
-      username: profileMap[log.user_id] || 'Unknown',
-    })));
-    setFriendsInProgress((inProgressLogs || []).map(log => ({
-      ...log,
-      username: profileMap[log.user_id] || 'Unknown',
-    })));
   }
 
   function handleLogMedia(media) {
@@ -170,7 +149,6 @@ export default function Home() {
       )}
 
       <div className="feeds-container">
-        {/* Friends Completed Activity */}
         <section className="feed-section">
           <h2 className="section-title accent-line">Friends recent activity!</h2>
           {loadingFeed ? (
@@ -192,7 +170,6 @@ export default function Home() {
           )}
         </section>
 
-        {/* Friends In Progress */}
         <section className="feed-section">
           <h2 className="section-title accent-line">Friends current consumption!</h2>
           {loadingFeed ? (
