@@ -1,11 +1,9 @@
 import { useEffect, useRef } from 'react';
 
 /**
- * Calls `callback` whenever the app returns to the foreground
- * (tab becomes visible / PWA resumes from background).
- *
- * Uses a ref so the callback can change on every render without
- * causing the event listener to be re-registered.
+ * Calls `callback` whenever the app/tab returns to the foreground.
+ * The callback should be a SILENT refresh — do not call setLoading(true)
+ * inside it, so existing content stays visible while data refreshes.
  */
 export function useOnFocus(callback) {
   const savedCallback = useRef(callback);

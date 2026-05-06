@@ -54,48 +54,58 @@ export default function Profile() {
     }
   }, [profile?.id]);
 
-  // Re-fetch logs when returning to the app from background
+  // Re-fetch logs when returning to the app from background — silently
   useOnFocus(() => {
-    if (profile) loadProfileData();
+    if (profile) refreshProfileData();
   });
 
   async function loadProfileData() {
     setLoading(true);
     try {
-      const { data } = await supabase
-        .from('logs')
-        .select('*')
-        .eq('user_id', profile.id)
-        .order('logged_at', { ascending: false });
-
-      const allLogs = data || [];
-      setLogs(allLogs);
-      setRecent(allLogs.slice(0, 10));
-
-      const storedIds = profile.top4_ids || [];
-      const resolved  = storedIds.map(id => allLogs.find(l => l.id === id)).filter(Boolean);
-      setTop4(resolved);
-
-      const completedLogs = allLogs.filter(l => l.status === 'completed');
-      const byType = completedLogs.reduce((acc, l) => {
-        const bucket = (l.media_type === 'season' || l.media_type === 'episode')
-          ? 'show'
-          : l.media_type;
-        acc[bucket] = (acc[bucket] || 0) + 1;
-        return acc;
-      }, {});
-      setStats({
-        total: completedLogs.length,
-        movie: byType.movie || 0,
-        show:  byType.show  || 0,
-        book:  byType.book  || 0,
-        game:  byType.game  || 0,
-      });
+      await fetchProfileData();
     } catch (e) {
       console.error('loadProfileData error:', e);
     } finally {
       setLoading(false);
     }
+  }
+
+  // Silent version — no loading state, used by useOnFocus so existing
+  // content stays visible while data refreshes in the background.
+  async function refreshProfileData() {
+    try { await fetchProfileData(); } catch (e) { console.error(e); }
+  }
+
+  async function fetchProfileData() {
+    const { data } = await supabase
+      .from('logs')
+      .select('*')
+      .eq('user_id', profile.id)
+      .order('logged_at', { ascending: false });
+
+    const allLogs = data || [];
+    setLogs(allLogs);
+    setRecent(allLogs.slice(0, 10));
+
+    const storedIds = profile.top4_ids || [];
+    const resolved = storedIds.map(id => allLogs.find(l => l.id === id)).filter(Boolean);
+    setTop4(resolved);
+
+    const completedLogs = allLogs.filter(l => l.status === 'completed');
+    const byType = completedLogs.reduce((acc, l) => {
+      const bucket = (l.media_type === 'season' || l.media_type === 'episode')
+        ? 'show'
+        : l.media_type;
+      acc[bucket] = (acc[bucket] || 0) + 1;
+      return acc;
+    }, {});
+    setStats({
+      total: completedLogs.length,
+      movie: byType.movie || 0,
+      show:  byType.show  || 0,
+      book:  byType.book  || 0,
+      game:  byType.game  || 0,
+    });
   }
 
   const deleteLog = async (id) => {

@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { useOnFocus } from '../services/useOnFocus';
 import { Link, useNavigate } from 'react-router-dom';
 import { supabase } from '../services/supabase';
 import { useAuth } from '../context/AuthContext';
@@ -191,7 +192,14 @@ export default function Social() {
   const [toast, setToast] = useState('');
   const searchTimeout = useRef(null);
 
-  useEffect(() => { if (user) { loadSocial(); loadThreads(); } }, [user]);
+  useEffect(() => { if (user?.id) { loadSocial(); loadThreads(); } }, [user?.id]);
+
+  // Silent refresh on tab focus — no loading spinners, existing content stays visible
+  useOnFocus(() => {
+    if (!user?.id) return;
+    refreshSocial();
+    refreshThreads();
+  });
 
   // ─── Social / messages ───────────────────
   async function loadSocial() {
@@ -231,6 +239,44 @@ export default function Social() {
       }
     } catch (e) { console.error(e); }
     finally { setLoadingMessages(false); }
+  }
+
+  // Silent version — no loading state, used by useOnFocus
+  async function refreshSocial() {
+    try {
+      const { data: all } = await supabase
+        .from('friendships')
+        .select(`
+          id, status, requester_id, addressee_id,
+          requester:profiles!friendships_requester_id_fkey(id, username, avatar_url),
+          addressee:profiles!friendships_addressee_id_fkey(id, username, avatar_url)
+        `)
+        .or(`requester_id.eq.${user.id},addressee_id.eq.${user.id}`);
+
+      const rows = all || [];
+      setRequests(rows.filter(r => r.addressee_id === user.id && r.status === 'pending'));
+      setOutgoing(rows.filter(r => r.requester_id === user.id && r.status === 'pending'));
+      setFriends(rows.filter(r => r.status === 'accepted').map(r => ({
+        friendship_id: r.id,
+        ...(r.requester_id === user.id ? r.addressee : r.requester),
+      })));
+
+      const { data: myGroups } = await supabase
+        .from('group_chat_members')
+        .select('group_id')
+        .eq('user_id', user.id);
+
+      const ids = myGroups?.map(m => m.group_id) || [];
+      if (ids.length > 0) {
+        const { data: groupData } = await supabase
+          .from('group_chats')
+          .select('id, name, created_at, group_chat_members(user_id)')
+          .in('id', ids);
+        setGroupChats(groupData || []);
+      } else {
+        setGroupChats([]);
+      }
+    } catch (e) { console.error(e); }
   }
 
   // ─── Threads ─────────────────────────────
@@ -308,7 +354,72 @@ export default function Social() {
     finally { setLoadingThreads(false); }
   }
 
-  async function postThread() {
+  // Silent version of loadThreads — no loading state, used by useOnFocus
+  async function refreshThreads() {
+    try { await loadThreadsData(); } catch (e) { console.error(e); }
+  }
+
+  // Shared data-fetching logic for loadThreads and refreshThreads
+  async function loadThreadsData() {
+    const { data: threadRows } = await supabase
+      .from('threads')
+      .select('id, user_id, content, created_at, like_count')
+      .order('created_at', { ascending: false })
+      .limit(50);
+
+    if (!threadRows || threadRows.length === 0) { setThreads([]); return; }
+
+    const threadUserIds = [...new Set(threadRows.map(t => t.user_id))];
+    const { data: threadProfiles } = await supabase
+      .from('profiles').select('id, username, avatar_url').in('id', threadUserIds);
+
+    const profileMap = Object.fromEntries((threadProfiles || []).map(p => [p.id, p]));
+
+    const { data: myLikes } = await supabase
+      .from('thread_likes').select('thread_id').eq('user_id', user.id);
+    const likedSet = new Set((myLikes || []).map(l => l.thread_id));
+
+    const threadIds = threadRows.map(t => t.id);
+    let commentRows = [];
+    if (threadIds.length > 0) {
+      const { data: comments } = await supabase
+        .from('thread_comments')
+        .select('id, thread_id, user_id, content, parent_id, created_at')
+        .in('thread_id', threadIds)
+        .order('created_at', { ascending: true });
+      commentRows = comments || [];
+    }
+
+    const commentUserIds = [...new Set(commentRows.map(c => c.user_id))];
+    let commentProfileMap = {};
+    if (commentUserIds.length > 0) {
+      const { data: cp } = await supabase
+        .from('profiles').select('id, username, avatar_url').in('id', commentUserIds);
+      commentProfileMap = Object.fromEntries((cp || []).map(p => [p.id, p]));
+    }
+
+    const commentsByThread = {};
+    commentRows.forEach(c => {
+      if (!commentsByThread[c.thread_id]) commentsByThread[c.thread_id] = [];
+      const prof = commentProfileMap[c.user_id] || {};
+      commentsByThread[c.thread_id].push({
+        ...c,
+        username: prof.username || '?',
+        avatar_url: prof.avatar_url || null,
+      });
+    });
+
+    setThreads(threadRows.map(t => {
+      const prof = profileMap[t.user_id] || {};
+      return {
+        ...t,
+        username:    prof.username   || '?',
+        avatar_url:  prof.avatar_url || null,
+        liked_by_me: likedSet.has(t.id),
+        comments:    commentsByThread[t.id] || [],
+      };
+    }));
+  }
     if (!newThreadText.trim() || postingThread) return;
     setPostingThread(true);
     const { error } = await supabase.from('threads').insert({

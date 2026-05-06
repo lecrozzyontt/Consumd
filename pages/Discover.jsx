@@ -37,31 +37,40 @@ export default function Discover() {
     loadAll();
   }, []);
 
-  // Re-fetch categories when returning to the app from background
-  useOnFocus(loadAll);
+  // Re-fetch categories when returning to the app from background — silently
+  useOnFocus(() => { refreshAll(); });
 
   async function loadAll() {
     setLoading(true);
     try {
-      const [m, tm, s, ts, b, g] = await Promise.allSettled([
-        fetchTrendingMovies(),
-        fetchTopRatedMovies(),
-        fetchTrendingShows(),
-        fetchTopRatedShows(),
-        fetchTrendingBooks(),
-        fetchTrendingGames(),
-      ]);
-      setTrendingMovies(m.value || []);
-      setTopMovies(tm.value || []);
-      setTrendingShows(s.value || []);
-      setTopShows(ts.value || []);
-      setTrendingBooks(b.value || []);
-      setTrendingGames(g.value || []);
+      await fetchAllCategories();
     } catch (e) {
       console.error('loadAll error:', e);
     } finally {
       setLoading(false);
     }
+  }
+
+  // Silent version — no loading state, used by useOnFocus
+  async function refreshAll() {
+    try { await fetchAllCategories(); } catch (e) { console.error(e); }
+  }
+
+  async function fetchAllCategories() {
+    const [m, tm, s, ts, b, g] = await Promise.allSettled([
+      fetchTrendingMovies(),
+      fetchTopRatedMovies(),
+      fetchTrendingShows(),
+      fetchTopRatedShows(),
+      fetchTrendingBooks(),
+      fetchTrendingGames(),
+    ]);
+    setTrendingMovies(m.value || []);
+    setTopMovies(tm.value || []);
+    setTrendingShows(s.value || []);
+    setTopShows(ts.value || []);
+    setTrendingBooks(b.value || []);
+    setTrendingGames(g.value || []);
   }
 
   const handleSearch = (q) => {

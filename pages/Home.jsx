@@ -37,104 +37,112 @@ export default function Home() {
     loadFriendsFeed(user.id);
   }, [user?.id]);
 
-  // Re-fetch everything when the app comes back to the foreground
+  // Re-fetch on tab focus — silent (no spinner, existing content stays visible)
   useOnFocus(() => {
-    loadMedia();
-    if (user?.id) loadFriendsFeed(user.id);
+    refreshMedia();
+    if (user?.id) refreshFriendsFeed(user.id);
   });
 
   async function loadMedia() {
     setLoadingMedia(true);
     try {
-      const [movies, shows, books, games] = await Promise.all([
-        fetchTrendingMovies(),
-        fetchTrendingShows(),
-        fetchTrendingBooks(),
-        fetchTrendingGames(),
-      ]);
-      setTrendingMovies(movies);
-      setTrendingShows(shows);
-      setTrendingBooks(books);
-      setTrendingGames(games);
-    } catch (e) {
-      console.error(e);
+      await fetchMediaData();
     } finally {
       setLoadingMedia(false);
     }
   }
 
-  // userId is now passed in directly — no need to call supabase.auth.getUser()
-  // which races against AuthContext on a cold PWA launch.
+  // Silent version — no loading state, used by useOnFocus
+  async function refreshMedia() {
+    try { await fetchMediaData(); } catch (e) { console.error(e); }
+  }
+
+  async function fetchMediaData() {
+    const [movies, shows, books, games] = await Promise.all([
+      fetchTrendingMovies(),
+      fetchTrendingShows(),
+      fetchTrendingBooks(),
+      fetchTrendingGames(),
+    ]);
+    setTrendingMovies(movies);
+    setTrendingShows(shows);
+    setTrendingBooks(books);
+    setTrendingGames(games);
+  }
+
   async function loadFriendsFeed(userId) {
     setLoadingFeed(true);
     try {
-      const { data: friendships } = await supabase
-        .from('friendships')
-        .select('requester_id, addressee_id')
-        .eq('status', 'accepted')
-        .or(`requester_id.eq.${userId},addressee_id.eq.${userId}`);
-
-      const friendIds = (friendships || []).map(f =>
-        f.requester_id === userId ? f.addressee_id : f.requester_id
-      );
-
-      if (friendIds.length === 0) {
-        setFriendsActivity([]);
-        setFriendsInProgress([]);
-        setLoadingFeed(false);
-        return;
-      }
-
-      // Fetch completed logs
-      const { data: completedLogs } = await supabase
-        .from('logs')
-        .select('id, title, media_type, cover_url, rating, review, status, logged_at, user_id')
-        .in('user_id', friendIds)
-        .eq('status', 'completed')
-        .order('logged_at', { ascending: false })
-        .limit(20);
-
-      // Fetch in_progress logs
-      const { data: inProgressLogs } = await supabase
-        .from('logs')
-        .select('id, title, media_type, cover_url, rating, review, status, logged_at, user_id')
-        .in('user_id', friendIds)
-        .eq('status', 'in_progress')
-        .order('logged_at', { ascending: false })
-        .limit(20);
-
-      const allLogs = [...(completedLogs || []), ...(inProgressLogs || [])];
-
-      if (allLogs.length === 0) {
-        setFriendsActivity([]);
-        setFriendsInProgress([]);
-        setLoadingFeed(false);
-        return;
-      }
-
-      // Fetch usernames separately
-      const userIds = [...new Set(allLogs.map(l => l.user_id))];
-      const { data: profiles } = await supabase
-        .from('profiles')
-        .select('id, username')
-        .in('id', userIds);
-
-      const profileMap = Object.fromEntries((profiles || []).map(p => [p.id, p.username]));
-
-      setFriendsActivity((completedLogs || []).map(log => ({
-        ...log,
-        username: profileMap[log.user_id] || 'Unknown',
-      })));
-
-      setFriendsInProgress((inProgressLogs || []).map(log => ({
-        ...log,
-        username: profileMap[log.user_id] || 'Unknown',
-      })));
+      await fetchFeedData(userId);
     } catch (e) {
       console.error(e);
     } finally {
       setLoadingFeed(false);
     }
+  }
+
+  // Silent version — no loading state, used by useOnFocus
+  async function refreshFriendsFeed(userId) {
+    try { await fetchFeedData(userId); } catch (e) { console.error(e); }
+  }
+
+  async function fetchFeedData(userId) {
+    const { data: friendships } = await supabase
+      .from('friendships')
+      .select('requester_id, addressee_id')
+      .eq('status', 'accepted')
+      .or(`requester_id.eq.${userId},addressee_id.eq.${userId}`);
+
+    const friendIds = (friendships || []).map(f =>
+      f.requester_id === userId ? f.addressee_id : f.requester_id
+    );
+
+    if (friendIds.length === 0) {
+      setFriendsActivity([]);
+      setFriendsInProgress([]);
+      return;
+    }
+
+    const [{ data: completedLogs }, { data: inProgressLogs }] = await Promise.all([
+      supabase
+        .from('logs')
+        .select('id, title, media_type, cover_url, rating, review, status, logged_at, user_id')
+        .in('user_id', friendIds)
+        .eq('status', 'completed')
+        .order('logged_at', { ascending: false })
+        .limit(20),
+      supabase
+        .from('logs')
+        .select('id, title, media_type, cover_url, rating, review, status, logged_at, user_id')
+        .in('user_id', friendIds)
+        .eq('status', 'in_progress')
+        .order('logged_at', { ascending: false })
+        .limit(20),
+    ]);
+
+    const allLogs = [...(completedLogs || []), ...(inProgressLogs || [])];
+    if (allLogs.length === 0) {
+      setFriendsActivity([]);
+      setFriendsInProgress([]);
+      return;
+    }
+
+    const userIds = [...new Set(allLogs.map(l => l.user_id))];
+    const { data: profiles } = await supabase
+      .from('profiles')
+      .select('id, username')
+      .in('id', userIds);
+
+    const profileMap = Object.fromEntries((profiles || []).map(p => [p.id, p.username]));
+
+    setFriendsActivity((completedLogs || []).map(log => ({
+      ...log,
+      username: profileMap[log.user_id] || 'Unknown',
+    })));
+    setFriendsInProgress((inProgressLogs || []).map(log => ({
+      ...log,
+      username: profileMap[log.user_id] || 'Unknown',
+    })));
   }
 
   function handleLogMedia(media) {
