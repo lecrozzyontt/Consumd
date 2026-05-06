@@ -1,0 +1,42 @@
+/* ============================================================
+   Reusable Avatar
+   Used everywhere a user is rendered so the same fallback,
+   image cropping, and ring style applies app-wide.
+   ============================================================ */
+
+.app-avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  overflow: hidden;
+  flex-shrink: 0;
+  background: var(--accent-dim, rgba(74, 143, 96, 0.15));
+  border: 1px solid var(--accent, #4A8F60);
+  color: var(--accent, #4A8F60);
+  font-weight: 700;
+  font-family: var(--font-display, sans-serif);
+  line-height: 1;
+  user-select: none;
+  position: relative;
+}
+
+.app-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.app-avatar-initial {
+  display: block;
+  letter-spacing: 0;
+}
+
+/* Subtle hover lift when used inside a clickable wrapper */
+a:hover > .app-avatar,
+button:hover > .app-avatar,
+.user-avatar-link:hover .app-avatar {
+  border-color: var(--accent, #4A8F60);
+  filter: brightness(1.06);
+}

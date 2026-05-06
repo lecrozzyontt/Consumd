@@ -1,0 +1,342 @@
+/* ── Re-use MessagesPage layout exactly ── */
+
+.group-avatar {
+  background: var(--accent);
+  color: var(--bg-primary);
+  font-weight: 700;
+  font-size: 0.9rem;
+}
+
+.group-member-count {
+  font-size: 0.78rem;
+  color: var(--text-dim);
+  font-weight: 400;
+  margin-left: 0.25rem;
+}
+
+/* Settings button in header */
+.settings-btn {
+  margin-left: auto;
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  font-size: 1rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all var(--transition);
+  flex-shrink: 0;
+}
+
+.settings-btn:hover {
+  color: var(--text);
+  border-color: var(--border-light);
+  background: rgba(255,255,255,0.06);
+}
+
+/* Sender name above received messages in group */
+.group-sender-name {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--accent);
+  margin-bottom: 0.15rem;
+  padding: 0 0.25rem;
+}
+
+/* ── Settings overlay + panel ── */
+
+.settings-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-end;
+  z-index: 200;
+  padding: 1rem;
+}
+
+.settings-panel {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  width: 320px;
+  max-height: calc(100vh - 2rem);
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  animation: slideIn 0.18s ease;
+}
+
+@keyframes slideIn {
+  from { opacity: 0; transform: translateX(16px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+.settings-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1.25rem 1.25rem 0.75rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.settings-header h3 {
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.settings-close {
+  background: transparent;
+  border: none;
+  color: var(--text-dim);
+  font-size: 0.9rem;
+  cursor: pointer;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all var(--transition);
+}
+
+.settings-close:hover {
+  background: rgba(255,255,255,0.08);
+  color: var(--text);
+}
+
+.settings-section {
+  padding: 1rem 1.25rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.settings-section:last-child {
+  border-bottom: none;
+}
+
+.settings-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.75rem;
+}
+
+.settings-label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-dim);
+  margin-bottom: 0.75rem;
+}
+
+.settings-section-header .settings-label {
+  margin-bottom: 0;
+}
+
+.settings-value {
+  font-size: 0.9rem;
+  color: var(--text);
+  font-weight: 500;
+}
+
+.rename-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.settings-input {
+  flex: 1;
+  padding: 0.55rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--bg-primary);
+  color: var(--text);
+  font-size: 0.875rem;
+  transition: border-color var(--transition);
+  min-width: 0;
+}
+
+.settings-input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.settings-action-btn {
+  padding: 0.45rem 0.85rem;
+  background: var(--accent);
+  color: var(--bg-primary);
+  border: none;
+  border-radius: var(--radius-lg);
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity var(--transition);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.settings-action-btn:hover {
+  opacity: 0.88;
+}
+
+.settings-action-btn.small {
+  padding: 0.35rem 0.65rem;
+  font-size: 0.75rem;
+}
+
+.settings-cancel-btn {
+  padding: 0.45rem 0.85rem;
+  background: transparent;
+  color: var(--text-dim);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  font-size: 0.8rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all var(--transition);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.settings-cancel-btn:hover {
+  color: var(--text);
+  border-color: var(--border-light);
+}
+
+.settings-add-btn {
+  padding: 0.35rem 0.75rem;
+  background: transparent;
+  color: var(--accent);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-lg);
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--transition);
+}
+
+.settings-add-btn:hover {
+  background: rgba(var(--accent-rgb), 0.1);
+}
+
+/* Add user area */
+.add-user-area {
+  margin-bottom: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.friends-to-add {
+  max-height: 150px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.friend-add-row,
+.member-row {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.45rem 0.5rem;
+  border-radius: var(--radius-md);
+  transition: background var(--transition);
+}
+
+.friend-add-row:hover {
+  background: rgba(255,255,255,0.04);
+}
+
+.mini-avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: var(--bg-primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.75rem;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.friend-add-row span,
+.member-row span {
+  font-size: 0.875rem;
+  color: var(--text);
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.you-badge {
+  font-size: 0.68rem !important;
+  font-weight: 600;
+  color: var(--accent) !important;
+  background: rgba(var(--accent-rgb), 0.12);
+  padding: 0.15rem 0.45rem;
+  border-radius: 999px;
+  flex: none !important;
+}
+
+.no-friends-msg {
+  font-size: 0.8rem;
+  color: var(--text-dim);
+  text-align: center;
+  padding: 0.75rem;
+}
+
+.members-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.mt-s {
+  margin-top: 0.25rem;
+}
+
+/* Leave group button */
+.leave-btn {
+  width: 100%;
+  padding: 0.65rem 1rem;
+  background: transparent;
+  color: #e05252;
+  border: 1px solid #e05252;
+  border-radius: var(--radius-lg);
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--transition);
+}
+
+.leave-btn:hover {
+  background: rgba(224, 82, 82, 0.1);
+}
+
+/* Spinner (copied from MessagesPage) */
+.spinner {
+  width: 40px;
+  height: 40px;
+  border: 3px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}

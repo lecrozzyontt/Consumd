@@ -1,0 +1,228 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Plus+Jakarta+Sans:wght@600;700;800&display=swap');
+
+:root {
+  /* Vibrant Dark Slate-Blue Backgrounds */
+  --bg:           #131E32;
+  --surface:      #1A273F;
+  --card:         #233352;
+  --card-hover:   #2D4065;
+  
+  /* Borders */
+  --border:       rgba(255, 255, 255, 0.12);
+  --border-light: rgba(255, 255, 255, 0.05);
+
+  /* Green Accents */
+  --accent:       #4A8F60;
+  --accent-dim:   rgba(74, 143, 96, 0.15);
+  --accent-glow:  rgba(74, 143, 96, 0.3);
+
+  /* Utilities */
+  --green:        #6FB483;
+  --red:          #ef4444;
+  --blue:         #60a5fa;
+
+  /* Text Colors */
+  --text:         #ffffff;
+  --text-muted:   #cbd5e1;
+  --text-dim:     #94a3b8;
+
+  --font-display: 'Plus Jakarta Sans', sans-serif;
+  --font-body:    'Inter', sans-serif;
+
+  --radius-sm:    6px;
+  --radius:       10px;
+  --radius-lg:    16px;
+  --radius-xl:    24px;
+
+  --shadow-sm:    0 2px 8px rgba(0, 0, 0, 0.2);
+  --shadow:       0 4px 24px rgba(0, 0, 0, 0.25);
+  --shadow-lg:    0 8px 48px rgba(0, 0, 0, 0.3);
+
+  --nav-height:   64px;
+  --transition:   0.2s ease;
+}
+
+/* ...existing code... */
+
+/* ============================================================
+   RESET & BASE
+   ============================================================ */
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html, body, #root {
+  height: 100%;
+  width: 100%;
+}
+
+body {
+  background-color: var(--bg);
+  color: var(--text);
+  font-family: var(--font-body);
+  font-weight: 400;
+  font-size: 15px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.03'/%3E%3C/svg%3E");
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+button {
+  cursor: pointer;
+  border: none;
+  font-family: var(--font-body);
+  font-size: 14px;
+  background: none;
+}
+
+input, textarea {
+  font-family: var(--font-body);
+}
+
+h1, h2, h3 {
+  font-family: var(--font-display);
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+/* ============================================================
+   LAYOUT
+   ============================================================ */
+.app-container {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+.main-content {
+  flex: 1;
+  width: 100%;
+  overflow-y: auto;
+  padding-top: var(--nav-height);
+}
+
+/* ============================================================
+   SHARED UTILITIES
+   ============================================================ */
+.page-wrapper {
+  max-width: 1320px;
+  margin: 0 auto;
+  padding: 2.5rem 2rem 5rem;
+}
+
+.page-title {
+  font-family: var(--font-display);
+  font-size: 2.4rem;
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: 0.25rem;
+}
+
+.page-subtitle {
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  margin-bottom: 2rem;
+}
+
+.section-title {
+  font-family: var(--font-display);
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 1.25rem;
+}
+
+.accent-line::after {
+  content: '';
+  display: block;
+  width: 2.5rem;
+  height: 2px;
+  background: var(--accent);
+  margin-top: 0.5rem;
+}
+
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border-light); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--text-dim); }
+
+.spinner {
+  width: 36px;
+  height: 36px;
+  border: 2px solid var(--border-light);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  margin: 4rem auto;
+}
+
+.loading-center {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 200px;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.fade-in {
+  animation: fadeIn 0.35s ease forwards;
+}
+
+.empty-state {
+  text-align: center;
+  padding: 3rem 1rem;
+  color: var(--text-muted);
+}
+
+.empty-state p {
+  font-size: 0.95rem;
+}
+
+.toast {
+  position: fixed;
+  bottom: 2rem;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--card);
+  border: 1px solid var(--accent);
+  color: var(--text);
+  padding: 0.75rem 1.5rem;
+  border-radius: var(--radius-xl);
+  font-size: 0.875rem;
+  z-index: 9999;
+  animation: fadeIn 0.3s ease;
+}
+
+@media (max-width: 768px) {
+  .page-wrapper {
+    padding: 1.5rem 1rem 5rem;
+  }
+  .page-title {
+    font-size: 1.8rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .page-wrapper {
+    padding: 1rem 0.75rem 5rem;
+  }
+  .page-title {
+    font-size: 1.5rem;
+  }
+}

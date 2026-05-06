@@ -1,0 +1,43 @@
+.discover-page {
+  padding-bottom: 4rem;
+}
+
+.filter-bar {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 2rem;
+  flex-wrap: wrap;
+}
+
+.filter-pill {
+  padding: 0.45rem 1.1rem;
+  border-radius: var(--radius-xl);
+  font-size: 0.82rem;
+  font-weight: 500;
+  background: var(--surface);
+  border: 1px solid var(--border-light);
+  color: var(--text-muted);
+  transition: all var(--transition);
+  white-space: nowrap;
+}
+
+.filter-pill:hover {
+  border-color: var(--accent);
+  color: var(--text);
+}
+
+.filter-pill.active {
+  background: var(--accent-dim);
+  border-color: var(--accent);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.search-results-section {
+  margin-bottom: 1.5rem;
+}
+
+@media (max-width: 480px) {
+  .filter-bar { gap: 0.35rem; }
+  .filter-pill { font-size: 0.75rem; padding: 0.35rem 0.75rem; }
+}
