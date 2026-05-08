@@ -9,7 +9,7 @@ import './Navbar.css';
  *   Home      → asymmetric tile grid (your media dashboard)
  *   Discover  → compass needle (exploration)
  *   Social    → overlapping speech bubbles (conversations)
- *   Profile   → user with a star accent (your collection)
+ *   Profile   → user (your collection)
  */
 const NAV_ITEMS = [
   {
@@ -53,16 +53,8 @@ const NAV_ITEMS = [
     label: 'Profile',
     icon: (
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-        <circle cx="11" cy="9" r="4" />
-        <path d="M3 20c1.5-3.5 4.5-5 8-5s6.5 1.5 8 5" />
-        {/* star accent in top-right corner */}
-        <path
-          d="M19 3.2 L19.85 5 L21.8 5.25 L20.4 6.6 L20.75 8.5 L19 7.6 L17.25 8.5 L17.6 6.6 L16.2 5.25 L18.15 5 Z"
-          fill="currentColor"
-          stroke="currentColor"
-          strokeWidth="0.6"
-          strokeLinejoin="round"
-        />
+        <circle cx="12" cy="9" r="4" />
+        <path d="M4 20c1.5-3.5 4.5-5 8-5s6.5 1.5 8 5" />
       </svg>
     ),
   },
