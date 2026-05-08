@@ -1,8 +1,10 @@
 import { useParams, useLocation } from 'react-router-dom';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { supabase } from '../services/supabase';
+import { useAuth } from '../context/AuthContext';
 import ReviewInteractions from '../components/ReviewInteractions';
 import Avatar from '../components/Avatar';
+import ReportModal from '../components/ReportModal';
 import './ReviewDetailPage.css';
 
 const TYPE_COLORS = {
@@ -16,20 +18,30 @@ const TYPE_COLORS = {
 
 export default function ReviewDetailPage() {
   const { logId } = useParams();
-  const { state } = useLocation();
-  const [log, setLog] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const { user }  = useAuth();
+  const [log, setLog]           = useState(null);
+  const [loading, setLoading]   = useState(true);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [reportOpen, setReportOpen] = useState(false);
+  const menuRef = useRef(null);
 
+  // Close menu on outside click
   useEffect(() => {
-    fetchLog();
-  }, [logId]);
+    function handleClick(e) {
+      if (menuRef.current && !menuRef.current.contains(e.target)) setMenuOpen(false);
+    }
+    if (menuOpen) document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [menuOpen]);
+
+  useEffect(() => { fetchLog(); }, [logId]);
 
   async function fetchLog() {
     setLoading(true);
     try {
       const { data } = await supabase
         .from('logs')
-        .select('*, profiles(username, avatar_url)')
+        .select('*, profiles(id, username, avatar_url)')
         .eq('id', logId)
         .single();
       setLog(data);
@@ -52,12 +64,14 @@ export default function ReviewDetailPage() {
     </div>
   );
 
-  const typeColor = TYPE_COLORS[log.media_type] || 'var(--accent)';
+  const typeColor  = TYPE_COLORS[log.media_type] || 'var(--accent)';
+  const isOwnLog   = user?.id === log.user_id;
+  const authorId   = log.profiles?.id || log.user_id;
 
   return (
     <div className="review-detail-page page-wrapper fade-in">
       <div className="review-detail-container">
-        
+
         {/* Cover */}
         <div className="review-cover">
           {log.cover_url ? (
@@ -82,17 +96,36 @@ export default function ReviewDetailPage() {
               <div className="review-user-info">
                 <h2 className="review-username">{log.profiles?.username}</h2>
                 <span className="review-date">
-                  {new Date(log.logged_at).toLocaleDateString('en-US', { 
-                    year: 'numeric', 
-                    month: 'long', 
-                    day: 'numeric' 
+                  {new Date(log.logged_at).toLocaleDateString('en-US', {
+                    year: 'numeric', month: 'long', day: 'numeric'
                   })}
                 </span>
               </div>
             </div>
-            <span className="review-type" style={{ color: typeColor }}>
-              {log.media_type}
-            </span>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+              <span className="review-type" style={{ color: typeColor }}>{log.media_type}</span>
+
+              {/* ⋯ kebab — report only on other users' reviews */}
+              {!isOwnLog && user && (
+                <div className="kebab-wrap" ref={menuRef}>
+                  <button
+                    className="kebab-btn"
+                    onClick={() => setMenuOpen(o => !o)}
+                    aria-label="More options"
+                  >
+                    ···
+                  </button>
+                  {menuOpen && (
+                    <div className="kebab-menu">
+                      <button onClick={() => { setMenuOpen(false); setReportOpen(true); }}>
+                        🚩 Report Review
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
 
           <h1 className="review-title">{log.title}</h1>
@@ -121,6 +154,15 @@ export default function ReviewDetailPage() {
           )}
         </div>
       </div>
+
+      {/* Report modal */}
+      <ReportModal
+        isOpen={reportOpen}
+        onClose={() => setReportOpen(false)}
+        contentId={log.id}
+        contentType="review"
+        reportedUserId={authorId}
+      />
     </div>
   );
 }

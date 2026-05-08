@@ -124,8 +124,6 @@
   box-shadow: 0 2px 8px rgba(0,0,0,0.12);
 }
 
-
-
 /* ── Divider ── */
 .auth-divider {
   display: flex;
@@ -236,7 +234,6 @@
   display: inline-block;
 }
 
-/* Dark spinner for light-background buttons (Google) */
 .btn-spinner--dark {
   border-color: rgba(0,0,0,0.15);
   border-top-color: #3c3c3c;
@@ -270,6 +267,7 @@
   }
 }
 
+/* ── Legacy checkbox field (kept for compat) ── */
 .checkbox-field {
   margin: 1rem 0;
 }
@@ -290,11 +288,6 @@
   height: 1.1rem;
 }
 
-.checkbox-field span {
-  color: var(--text-secondary);
-  line-height: 1.5;
-}
-
 .legal-link {
   background: none;
   border: none;
@@ -308,4 +301,81 @@
 
 .legal-link:hover {
   text-decoration: underline;
+}
+
+/* ── Terms & Community Rules (Apple requirement) ── */
+.terms-field {
+  gap: 0.75rem;
+}
+
+.terms-checkbox-label {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.65rem;
+  cursor: pointer;
+}
+
+.terms-checkbox {
+  flex-shrink: 0;
+  width: 1.1rem;
+  height: 1.1rem;
+  margin-top: 0.15rem;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+.terms-text {
+  font-size: 0.83rem;
+  color: var(--text-muted);
+  line-height: 1.55;
+  text-transform: none;
+  letter-spacing: 0;
+  font-weight: 400;
+}
+
+.terms-link {
+  background: none;
+  border: none;
+  color: var(--accent);
+  cursor: pointer;
+  padding: 0;
+  font: inherit;
+  font-size: inherit;
+  text-decoration: underline;
+  transition: color 0.15s;
+}
+
+.terms-link:hover {
+  color: #d4b55c;
+}
+
+.community-rules {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius);
+  padding: 0.75rem 1rem;
+}
+
+.community-rules-title {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  margin: 0 0 0.5rem 0;
+}
+
+.community-rules ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.community-rules li {
+  font-size: 0.82rem;
+  color: var(--text-secondary, rgba(255,255,255,0.55));
+  line-height: 1.4;
 }

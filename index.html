@@ -2,7 +2,19 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <!--
+      width=device-width      – match the physical screen width
+      initial-scale=1.0       – no zoom on first load
+      viewport-fit=cover      – fill notched/rounded screens edge-to-edge
+      interactive-widget=resizes-visual
+                              – on Android Chrome, the virtual keyboard shrinks
+                                the visual viewport only (not the layout viewport),
+                                so fixed/sticky elements don't jump around
+    -->
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-visual"
+    />
     <title>Consumd</title>
     <meta name="description" content="Your personal media archive — movies, shows, books, games." />
     <meta name="theme-color" content="#07070f" />

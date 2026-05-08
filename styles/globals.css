@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Plus+Jakarta+Sans:wght@600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Plus Jakarta Sans:wght@600;700;800&display=swap');
 
 :root {
   /* Vibrant Dark Slate-Blue Backgrounds */
@@ -6,7 +6,7 @@
   --surface:      #1A273F;
   --card:         #233352;
   --card-hover:   #2D4065;
-  
+
   /* Borders */
   --border:       rgba(255, 255, 255, 0.12);
   --border-light: rgba(255, 255, 255, 0.05);
@@ -42,8 +42,6 @@
   --transition:   0.2s ease;
 }
 
-/* ...existing code... */
-
 /* ============================================================
    RESET & BASE
    ============================================================ */
@@ -51,11 +49,22 @@
   box-sizing: border-box;
   margin: 0;
   padding: 0;
+  /* Prevent any individual element from blowing out the width */
+  min-width: 0;
+}
+
+/* ── Horizontal overflow: locked at the root ── */
+html {
+  overflow-x: hidden;
+  /* smooth scroll for anchor links */
+  scroll-behavior: smooth;
 }
 
 html, body, #root {
   height: 100%;
-  width: 100%;
+  /* Clamp every layer so nothing can push past the viewport edge */
+  max-width: 100%;
+  overflow-x: hidden;
 }
 
 body {
@@ -83,8 +92,29 @@ button {
   background: none;
 }
 
-input, textarea {
+/* ── iOS zoom fix ──────────────────────────────────────────────────────────
+   iOS Safari zooms in on any focused field whose font-size < 16px.
+   Setting 16px as the floor for all interactive text fields prevents that
+   without disabling the user's ability to pinch-zoom the page.
+   The !important is intentional: it must win over component-level overrides
+   that would otherwise keep the value below 16px.
+   ───────────────────────────────────────────────────────────────────────── */
+input,
+input[type="text"],
+input[type="email"],
+input[type="password"],
+input[type="search"],
+input[type="number"],
+input[type="tel"],
+input[type="url"],
+textarea,
+select {
   font-family: var(--font-body);
+  /* 16px minimum — prevents iOS auto-zoom. Component styles may scale
+     text visually using padding/transform but this floor must not drop. */
+  font-size: 16px !important;
+  /* Tap targets respond immediately — no 300ms delay on mobile */
+  touch-action: manipulation;
 }
 
 h1, h2, h3 {
@@ -100,13 +130,17 @@ h1, h2, h3 {
   display: flex;
   flex-direction: column;
   min-height: 100vh;
+  /* Belt-and-suspenders: container itself cannot overflow */
+  overflow-x: hidden;
+  width: 100%;
 }
 
 .main-content {
   flex: 1;
   width: 100%;
+  /* Allow vertical scroll, block horizontal */
+  overflow-x: hidden;
   overflow-y: auto;
-  /* Apply safe area directly here */
   padding-top: calc(var(--nav-height) + env(safe-area-inset-top, 0px));
 }
 
@@ -115,12 +149,14 @@ h1, h2, h3 {
    ============================================================ */
 .page-wrapper {
   max-width: 1320px;
+  /* Keep the wrapper within the viewport on every screen */
+  width: 100%;
   margin: 0 auto;
-  /* Apply safe area directly to the bottom padding (the 3rd value) */
   padding: 2.5rem 2rem calc(5rem + env(safe-area-inset-bottom, 0px));
+  /* Safeguard: wrapper itself never overflows */
+  overflow-x: hidden;
 }
 
-/* Adjust bottom padding for the home indicator when installed as an app */
 @media (display-mode: standalone), (display-mode: fullscreen) {
   .page-wrapper {
     padding-bottom: calc(5rem + env(safe-area-inset-bottom, 0px));
@@ -215,6 +251,11 @@ h1, h2, h3 {
   border-radius: var(--radius-xl);
   font-size: 0.875rem;
   z-index: 9999;
+  /* Prevent toast from pushing page width on small screens */
+  max-width: calc(100vw - 2rem);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
   animation: fadeIn 0.3s ease;
 }
 
