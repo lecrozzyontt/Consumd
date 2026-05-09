@@ -24,6 +24,12 @@
 	<string>$(CURRENT_PROJECT_VERSION)</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<key>NSCameraUsageDescription</key>
+	<string>Consumd uses your camera to set a profile photo.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Consumd accesses your photo library to set a profile photo.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>Consumd saves photos to your library.</string>
 	<key>UILaunchStoryboardName</key>
 	<string>LaunchScreen</string>
 	<key>UIMainStoryboardFile</key>

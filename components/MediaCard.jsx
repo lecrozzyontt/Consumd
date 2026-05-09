@@ -1,6 +1,13 @@
 import { useNavigate } from 'react-router-dom';
 import './MediaCard.css';
 
+const TYPE_LABELS = {
+  movie: 'Film',
+  show:  'Show',
+  book:  'Book',
+  game:  'Game',
+};
+
 const TYPE_COLORS = {
   movie: '#c9a84c',
   show:  '#60a5fa',
@@ -15,6 +22,7 @@ export default function MediaCard({ media, onLog }) {
   const title     = media.title || 'Unknown';
   const year      = media.year || '';
   const typeColor = TYPE_COLORS[media.media_type] || 'var(--accent)';
+  const typeLabel = TYPE_LABELS[media.media_type] || media.media_type;
 
   return (
     <div className="media-card" onClick={() => navigate('/media', { state: { media } })}>
@@ -38,7 +46,7 @@ export default function MediaCard({ media, onLog }) {
           {year && <span className="meta-year">{year}</span>}
           {media.media_type && (
             <span className="meta-type" style={{ color: typeColor }}>
-              {media.media_type}
+              {typeLabel}
             </span>
           )}
         </div>

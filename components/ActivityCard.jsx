@@ -9,6 +9,13 @@ const STATUS_LABELS = {
   want:        'Want to Consume',
 };
 
+const TYPE_LABELS = {
+  movie: 'Film',
+  show:  'Show',
+  book:  'Book',
+  game:  'Game',
+};
+
 const TYPE_COLORS = {
   movie: '#c9a84c',
   show:  '#60a5fa',
@@ -33,6 +40,7 @@ export default function ActivityCard({ activity, hideInteractions = false }) {
 
   const timeAgo = getTimeAgo(logged_at);
   const typeColor = TYPE_COLORS[media_type] || 'var(--accent)';
+  const typeLabel = TYPE_LABELS[media_type] || media_type;
 
   return (
     <article className="activity-card fade-in">
@@ -55,7 +63,7 @@ export default function ActivityCard({ activity, hideInteractions = false }) {
             <span className="activity-time">{timeAgo}</span>
           </div>
           <span className="activity-type" style={{ color: typeColor }}>
-            {media_type}
+            {typeLabel}
           </span>
         </div>
 

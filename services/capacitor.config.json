@@ -1,0 +1,17 @@
+{
+  "appId": "net.consumd.www",
+  "appName": "Consumd",
+  "webDir": "dist",
+  "bundledWebRuntime": false,
+  "server": {
+    "allowNavigation": [
+      "openlibrary.org",
+      "covers.openlibrary.org"
+    ]
+  },
+  "ios": {
+    "allowsLinkPreview": false,
+    "scrollEnabled": true,
+    "limitsNavigationsToAppBoundDomains": false
+  }
+}

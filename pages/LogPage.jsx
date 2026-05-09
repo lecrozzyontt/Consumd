@@ -14,9 +14,7 @@ export default function LogPage() {
 
   return (
     <div className="log-page">
-      <button className="back-arrow" onClick={() => navigate(-1)}>
-        ←
-      </button>
+      <button className="back-arrow" onClick={() => navigate(-1)}>←</button>
       <LogModal
         media={media}
         onClose={() => navigate(-1)}

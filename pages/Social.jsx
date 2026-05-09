@@ -10,8 +10,17 @@ import Avatar from '../components/Avatar';
 import ReportModal from '../components/ReportModal';
 import './Social.css';
 
+const LOAD_TIMEOUT_MS = 10000;
+
+function withTimeout(promise, ms = LOAD_TIMEOUT_MS) {
+  const timeout = new Promise((_, reject) =>
+    setTimeout(() => reject(new Error('Request timed out')), ms)
+  );
+  return Promise.race([promise, timeout]);
+}
+
 // ─────────────────────────────────────────
-//  THREAD CARD  (with ⋯ report menu)
+//  THREAD CARD
 // ─────────────────────────────────────────
 function ThreadCard({ thread, currentUser, onLike, onDelete, onCommentSubmit }) {
   const [expanded, setExpanded]       = useState(false);
@@ -26,7 +35,6 @@ function ThreadCard({ thread, currentUser, onLike, onDelete, onCommentSubmit }) 
   const liked = thread.liked_by_me;
   const isOwn = currentUser?.id === thread.user_id;
 
-  // Close menu on outside click
   useEffect(() => {
     function handleClick(e) {
       if (menuRef.current && !menuRef.current.contains(e.target)) setMenuOpen(false);
@@ -56,82 +64,46 @@ function ThreadCard({ thread, currentUser, onLike, onDelete, onCommentSubmit }) 
 
   return (
     <article className="thread-card">
-      {/* Header */}
       <div className="thread-header">
-        <Avatar
-          url={thread.avatar_url}
-          username={thread.username}
-          size={30}
-          className="thread-avatar"
-        />
+        <Avatar url={thread.avatar_url} username={thread.username} size={30} className="thread-avatar" />
         <div className="thread-meta">
           <span className="thread-username">@{thread.username}</span>
           <span className="thread-time">{timeAgo(thread.created_at)}</span>
         </div>
-
-        {/* ⋯ kebab — delete for own, report for others */}
         <div className="kebab-wrap" ref={menuRef} style={{ marginLeft: 'auto' }}>
-          <button
-            className="kebab-btn"
-            onClick={() => setMenuOpen(o => !o)}
-            aria-label="More options"
-          >
-            ···
-          </button>
+          <button className="kebab-btn" onClick={() => setMenuOpen(o => !o)} aria-label="More options">···</button>
           {menuOpen && (
             <div className="kebab-menu">
               {isOwn ? (
-                <button
-                  className="danger"
-                  onClick={() => { setMenuOpen(false); onDelete(thread.id); }}
-                >
-                  🗑 Delete
-                </button>
+                <button className="danger" onClick={() => { setMenuOpen(false); onDelete(thread.id); }}>🗑 Delete</button>
               ) : (
-                <button
-                  onClick={() => { setMenuOpen(false); setReportOpen(true); }}
-                >
-                  🚩 Report
-                </button>
+                <button onClick={() => { setMenuOpen(false); setReportOpen(true); }}>🚩 Report</button>
               )}
             </div>
           )}
         </div>
       </div>
 
-      {/* Body */}
       <p className="thread-body">{thread.content}</p>
 
-      {/* Actions */}
       <div className="thread-actions">
-        <button
-          className={`thread-action-btn ${liked ? 'liked' : ''}`}
-          onClick={() => onLike(thread.id, liked)}
-        >
+        <button className={`thread-action-btn ${liked ? 'liked' : ''}`} onClick={() => onLike(thread.id, liked)}>
           <span>{liked ? '♥' : '♡'}</span>
           <span>{thread.likes_count ?? 0}</span>
         </button>
-
-        <button
-          className="thread-action-btn"
+        <button className="thread-action-btn"
           onClick={() => { setExpanded(e => !e); setTimeout(() => inputRef.current?.focus(), 50); }}
-          title="Comment"
-        >
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
-            stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
-            style={{ marginTop: '2px' }}>
+          title="Comment">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginTop: '2px' }}>
             <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
           </svg>
           <span>{(thread.comments || []).length}</span>
         </button>
       </div>
 
-      {/* Comments */}
       {expanded && (
         <div className="thread-comments">
-          {topLevel.length === 0 && (
-            <p className="thread-no-comments">No comments yet.</p>
-          )}
+          {topLevel.length === 0 && <p className="thread-no-comments">No comments yet.</p>}
           {topLevel.map(c => (
             <div key={c.id} className="thread-comment">
               <Avatar url={c.avatar_url} username={c.username} size={24} className="tc-avatar" />
@@ -144,15 +116,9 @@ function ThreadCard({ thread, currentUser, onLike, onDelete, onCommentSubmit }) 
                 <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
                   <button className="tc-reply-btn" onClick={() => handleReply(c)}>Reply</button>
                   {currentUser?.id !== c.user_id && (
-                    <CommentReportButton
-                      commentId={c.id}
-                      reportedUserId={c.user_id}
-                      threadId={thread.id}
-                    />
+                    <CommentReportButton commentId={c.id} reportedUserId={c.user_id} threadId={thread.id} />
                   )}
                 </div>
-
-                {/* Nested replies */}
                 {replies.filter(r => r.parent_id === c.id).map(r => (
                   <div key={r.id} className="thread-comment thread-comment--reply">
                     <Avatar url={r.avatar_url} username={r.username} size={24} className="tc-avatar" />
@@ -168,8 +134,6 @@ function ThreadCard({ thread, currentUser, onLike, onDelete, onCommentSubmit }) 
               </div>
             </div>
           ))}
-
-          {/* Comment input */}
           <form className="tc-form" onSubmit={handleSubmit}>
             {replyTo && (
               <div className="tc-reply-banner">
@@ -178,14 +142,9 @@ function ThreadCard({ thread, currentUser, onLike, onDelete, onCommentSubmit }) 
               </div>
             )}
             <div className="tc-input-row">
-              <input
-                ref={inputRef}
-                className="tc-input"
+              <input ref={inputRef} className="tc-input"
                 placeholder={replyTo ? `Reply to @${replyTo.username}…` : 'Write a comment…'}
-                value={commentText}
-                onChange={e => setCommentText(e.target.value)}
-                maxLength={300}
-              />
+                value={commentText} onChange={e => setCommentText(e.target.value)} maxLength={300} />
               <button className="tc-submit" type="submit" disabled={submitting || !commentText.trim()}>
                 {submitting ? '…' : '↑'}
               </button>
@@ -194,42 +153,24 @@ function ThreadCard({ thread, currentUser, onLike, onDelete, onCommentSubmit }) 
         </div>
       )}
 
-      {/* Report modal */}
-      <ReportModal
-        isOpen={reportOpen}
-        onClose={() => setReportOpen(false)}
-        contentId={thread.id}
-        contentType="thread"
-        reportedUserId={thread.user_id}
-      />
+      <ReportModal isOpen={reportOpen} onClose={() => setReportOpen(false)}
+        contentId={thread.id} contentType="thread" reportedUserId={thread.user_id} />
     </article>
   );
 }
 
-// Small inline "Report comment" button
-function CommentReportButton({ commentId, reportedUserId, threadId }) {
+function CommentReportButton({ commentId, reportedUserId }) {
   const [open, setOpen] = useState(false);
   return (
     <>
-      <button
-        onClick={() => setOpen(true)}
-        style={{
-          background: 'none', border: 'none', cursor: 'pointer',
-          fontSize: '0.75rem', color: 'rgba(255,255,255,0.3)',
-          padding: '0', transition: 'color 0.15s'
-        }}
+      <button onClick={() => setOpen(true)}
+        style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.75rem', color: 'rgba(255,255,255,0.3)', padding: '0', transition: 'color 0.15s' }}
         onMouseEnter={e => e.currentTarget.style.color = 'rgba(255,255,255,0.6)'}
-        onMouseLeave={e => e.currentTarget.style.color = 'rgba(255,255,255,0.3)'}
-      >
+        onMouseLeave={e => e.currentTarget.style.color = 'rgba(255,255,255,0.3)'}>
         Report
       </button>
-      <ReportModal
-        isOpen={open}
-        onClose={() => setOpen(false)}
-        contentId={commentId}
-        contentType="comment"
-        reportedUserId={reportedUserId}
-      />
+      <ReportModal isOpen={open} onClose={() => setOpen(false)}
+        contentId={commentId} contentType="comment" reportedUserId={reportedUserId} />
     </>
   );
 }
@@ -244,41 +185,60 @@ export default function Social() {
   const [searchQuery, setSearchQuery]     = useState('');
   const [searchResults, setSearchResults] = useState([]);
   const [threadSearch, setThreadSearch]   = useState([]);
-  const [requests, setRequests]           = useState(() => cacheGet('social:friends')?.requests   || []);
-  const [friends, setFriends]             = useState(() => cacheGet('social:friends')?.friends    || []);
-  const [groupChats, setGroupChats]       = useState(() => cacheGet('social:friends')?.groupChats || []);
-  const [outgoing, setOutgoing]           = useState(() => cacheGet('social:friends')?.outgoing   || []);
+
+  const [requests, setRequests]     = useState(() => cacheGet('social:friends')?.requests   || []);
+  const [friends, setFriends]       = useState(() => cacheGet('social:friends')?.friends    || []);
+  const [groupChats, setGroupChats] = useState(() => cacheGet('social:friends')?.groupChats || []);
+  const [outgoing, setOutgoing]     = useState(() => cacheGet('social:friends')?.outgoing   || []);
+
   const [loadingMessages, setLoadingMessages] = useState(!cacheGet('social:friends'));
+  const [messagesError, setMessagesError]     = useState(false);
 
-  const [threads, setThreads]             = useState(() => cacheGet('social:threads') || []);
+  const [threads, setThreads]               = useState(() => cacheGet('social:threads') || []);
   const [loadingThreads, setLoadingThreads] = useState(!cacheGet('social:threads'));
-  const [newThreadText, setNewThreadText] = useState('');
-  const [postingThread, setPostingThread] = useState(false);
+  const [threadsError, setThreadsError]     = useState(false);
+  const [newThreadText, setNewThreadText]   = useState('');
+  const [postingThread, setPostingThread]   = useState(false);
 
-  const [blockedIds, setBlockedIds]       = useState([]);
-  const [toast, setToast]                 = useState('');
+  const [blockedIds, setBlockedIds] = useState([]);
+  const [toast, setToast]           = useState('');
+
   const searchTimeout = useRef(null);
+  const mounted       = useRef(true);
+
+  useEffect(() => {
+    mounted.current = true;
+    return () => { mounted.current = false; };
+  }, []);
 
   useEffect(() => {
     if (user?.id) {
       loadSocial();
       loadThreads();
-      getBlockedUserIds(user.id).then(setBlockedIds);
+      getBlockedUserIds(user.id).then(ids => { if (mounted.current) setBlockedIds(ids); });
     }
   }, [user?.id]);
 
-  // ─── Social ───────────────────────────────
+  // ─── Social / Messages ───────────────────
   async function loadSocial() {
+    if (!mounted.current) return;
     if (!cacheGet('social:friends')) setLoadingMessages(true);
+    setMessagesError(false);
+
     try {
-      const { data: all } = await supabase
-        .from('friendships')
-        .select(`
-          id, status, requester_id, addressee_id,
-          requester:profiles!friendships_requester_id_fkey(id, username, avatar_url),
-          addressee:profiles!friendships_addressee_id_fkey(id, username, avatar_url)
-        `)
-        .or(`requester_id.eq.${user.id},addressee_id.eq.${user.id}`);
+      const { data: all, error: allErr } = await withTimeout(
+        supabase
+          .from('friendships')
+          .select(`
+            id, status, requester_id, addressee_id,
+            requester:profiles!friendships_requester_id_fkey(id, username, avatar_url),
+            addressee:profiles!friendships_addressee_id_fkey(id, username, avatar_url)
+          `)
+          .or(`requester_id.eq.${user.id},addressee_id.eq.${user.id}`)
+      );
+
+      if (allErr) throw allErr;
+      if (!mounted.current) return;
 
       const rows = all || [];
       const req  = rows.filter(r => r.addressee_id === user.id && r.status === 'pending');
@@ -287,64 +247,88 @@ export default function Social() {
         friendship_id: r.id,
         ...(r.requester_id === user.id ? r.addressee : r.requester),
       }));
-      setRequests(req); setOutgoing(out); setFriends(fri);
 
-      const { data: myGroups } = await supabase
-        .from('group_chat_members').select('group_id').eq('user_id', user.id);
+      setRequests(req);
+      setOutgoing(out);
+      setFriends(fri);
+
+      const { data: myGroups } = await withTimeout(
+        supabase.from('group_chat_members').select('group_id').eq('user_id', user.id)
+      );
       const ids = myGroups?.map(m => m.group_id) || [];
+
+      let groups = [];
       if (ids.length > 0) {
-        const { data: groupData } = await supabase
-          .from('group_chats')
-          .select('id, name, created_at, group_chat_members(user_id)')
-          .in('id', ids);
-        setGroupChats(groupData || []);
-      } else {
-        setGroupChats([]);
+        const { data: groupData } = await withTimeout(
+          supabase.from('group_chats')
+            .select('id, name, created_at, group_chat_members(user_id)')
+            .in('id', ids)
+        );
+        groups = groupData || [];
       }
-      cacheSet('social:friends', { requests: req, friends: fri, outgoing: out, groupChats });
-    } catch (e) { console.error(e); }
-    finally { setLoadingMessages(false); }
+
+      if (!mounted.current) return;
+      setGroupChats(groups);
+      cacheSet('social:friends', { requests: req, friends: fri, outgoing: out, groupChats: groups });
+    } catch (e) {
+      console.error('[Social] loadSocial failed:', e);
+      if (mounted.current) setMessagesError(true);
+    } finally {
+      if (mounted.current) setLoadingMessages(false);
+    }
   }
 
   // ─── Threads ─────────────────────────────
   async function loadThreads() {
+    if (!mounted.current) return;
     if (!cacheGet('social:threads')) setLoadingThreads(true);
-    try {
-      const { data: threadRows } = await supabase
-        .from('threads')
-        .select('id, user_id, content, likes_count, created_at')
-        .order('likes_count', { ascending: false })
-        .order('created_at', { ascending: false })
-        .limit(50);
+    setThreadsError(false);
 
-      if (!threadRows || threadRows.length === 0) { setThreads([]); setLoadingThreads(false); return; }
+    try {
+      const { data: threadRows, error: tErr } = await withTimeout(
+        supabase
+          .from('threads')
+          .select('id, user_id, content, likes_count, created_at')
+          .order('likes_count', { ascending: false })
+          .order('created_at', { ascending: false })
+          .limit(50)
+      );
+
+      if (tErr) throw tErr;
+      if (!mounted.current) return;
+
+      if (!threadRows || threadRows.length === 0) {
+        setThreads([]);
+        cacheSet('social:threads', []);
+        return;
+      }
 
       const threadUserIds = [...new Set(threadRows.map(t => t.user_id))];
-      const { data: threadProfiles } = await supabase
-        .from('profiles').select('id, username, avatar_url').in('id', threadUserIds);
+
+      const [{ data: threadProfiles }, { data: myLikes }, { data: comments }] = await withTimeout(
+        Promise.all([
+          supabase.from('profiles').select('id, username, avatar_url').in('id', threadUserIds),
+          supabase.from('thread_likes').select('thread_id').eq('user_id', user.id),
+          supabase.from('thread_comments')
+            .select('id, thread_id, user_id, content, parent_id, created_at')
+            .in('thread_id', threadRows.map(t => t.id))
+            .order('created_at', { ascending: true }),
+        ])
+      );
+
+      if (!mounted.current) return;
+
       (threadProfiles || []).forEach(primeProfile);
       const profileMap = Object.fromEntries((threadProfiles || []).map(p => [p.id, p]));
-
-      const { data: myLikes } = await supabase
-        .from('thread_likes').select('thread_id').eq('user_id', user.id);
-      const likedSet = new Set((myLikes || []).map(l => l.thread_id));
-
-      const threadIds = threadRows.map(t => t.id);
-      let commentRows = [];
-      if (threadIds.length > 0) {
-        const { data: comments } = await supabase
-          .from('thread_comments')
-          .select('id, thread_id, user_id, content, parent_id, created_at')
-          .in('thread_id', threadIds)
-          .order('created_at', { ascending: true });
-        commentRows = comments || [];
-      }
+      const likedSet   = new Set((myLikes || []).map(l => l.thread_id));
+      const commentRows = comments || [];
 
       const commentUserIds = [...new Set(commentRows.map(c => c.user_id))];
       let commentProfileMap = {};
       if (commentUserIds.length > 0) {
-        const { data: cp } = await supabase
-          .from('profiles').select('id, username, avatar_url').in('id', commentUserIds);
+        const { data: cp } = await withTimeout(
+          supabase.from('profiles').select('id, username, avatar_url').in('id', commentUserIds)
+        );
         (cp || []).forEach(primeProfile);
         commentProfileMap = Object.fromEntries((cp || []).map(p => [p.id, p]));
       }
@@ -353,43 +337,31 @@ export default function Social() {
       commentRows.forEach(c => {
         if (!commentsByThread[c.thread_id]) commentsByThread[c.thread_id] = [];
         const prof = commentProfileMap[c.user_id] || {};
-        commentsByThread[c.thread_id].push({
-          ...c,
-          username:   prof.username   || '?',
-          avatar_url: prof.avatar_url || null,
-        });
+        commentsByThread[c.thread_id].push({ ...c, username: prof.username || '?', avatar_url: prof.avatar_url || null });
       });
 
       const mapped = threadRows.map(t => {
         const prof = profileMap[t.user_id] || {};
-        return {
-          ...t,
-          username:    prof.username   || '?',
-          avatar_url:  prof.avatar_url || null,
-          liked_by_me: likedSet.has(t.id),
-          comments:    commentsByThread[t.id] || [],
-        };
+        return { ...t, username: prof.username || '?', avatar_url: prof.avatar_url || null, liked_by_me: likedSet.has(t.id), comments: commentsByThread[t.id] || [] };
       });
+
+      if (!mounted.current) return;
       setThreads(mapped);
       cacheSet('social:threads', mapped);
-    } catch (e) { console.error(e); }
-    finally { setLoadingThreads(false); }
+    } catch (e) {
+      console.error('[Social] loadThreads failed:', e);
+      if (mounted.current) setThreadsError(true);
+    } finally {
+      if (mounted.current) setLoadingThreads(false);
+    }
   }
 
   async function postThread() {
     if (!newThreadText.trim() || postingThread) return;
     setPostingThread(true);
-    // Apply profanity filter before saving
     const filtered = filterProfanity(newThreadText.trim());
-    const { error } = await supabase.from('threads').insert({
-      user_id: user.id,
-      content: filtered,
-      likes_count: 0,
-    });
-    if (!error) {
-      setNewThreadText('');
-      await loadThreads();
-    }
+    const { error } = await supabase.from('threads').insert({ user_id: user.id, content: filtered, likes_count: 0 });
+    if (!error) { setNewThreadText(''); await loadThreads(); }
     setPostingThread(false);
   }
 
@@ -399,23 +371,17 @@ export default function Social() {
         ? { ...t, liked_by_me: !currentlyLiked, likes_count: (t.likes_count || 0) + (currentlyLiked ? -1 : 1) }
         : t
     ));
-
     if (currentlyLiked) {
-      await supabase.from('thread_likes').delete()
-        .eq('thread_id', threadId).eq('user_id', user.id);
+      await supabase.from('thread_likes').delete().eq('thread_id', threadId).eq('user_id', user.id);
       await supabase.rpc('decrement_thread_likes', { thread_id: threadId });
     } else {
       await supabase.from('thread_likes').insert({ thread_id: threadId, user_id: user.id });
       await supabase.rpc('increment_thread_likes', { thread_id: threadId });
-
       const thread = threads.find(t => t.id === threadId);
       if (thread && thread.user_id !== user.id) {
         await supabase.from('notifications').insert({
-          user_id: thread.user_id,
-          actor_id: user.id,
-          type: 'thread_like',
-          reference_id: thread.id,
-          message: `@${user.user_metadata?.username || 'Someone'} liked your thread`,
+          user_id: thread.user_id, actor_id: user.id, type: 'thread_like',
+          reference_id: thread.id, message: `@${user.user_metadata?.username || 'Someone'} liked your thread`,
         });
       }
     }
@@ -428,7 +394,6 @@ export default function Social() {
   }
 
   async function submitComment(threadId, content, parentId) {
-    // Filter comment text before saving
     const filtered = filterProfanity(content);
     const { data } = await supabase
       .from('thread_comments')
@@ -442,17 +407,15 @@ export default function Social() {
           ? { ...t, comments: [...t.comments, { ...data, username: user.user_metadata?.username || 'You' }] }
           : t
       ));
-
       const thread = threads.find(t => t.id === threadId);
       let targetUserId = thread?.user_id;
       if (parentId) {
-        const parentComment = thread?.comments?.find(c => c.id === parentId);
-        if (parentComment) targetUserId = parentComment.user_id;
+        const parent = thread?.comments?.find(c => c.id === parentId);
+        if (parent) targetUserId = parent.user_id;
       }
       if (targetUserId && targetUserId !== user.id) {
         await supabase.from('notifications').insert({
-          user_id: targetUserId,
-          actor_id: user.id,
+          user_id: targetUserId, actor_id: user.id,
           type: parentId ? 'reply' : 'thread_comment',
           reference_id: threadId,
           message: `@${user.user_metadata?.username || 'Someone'} ${parentId ? 'replied to your comment' : 'commented on your thread'}`,
@@ -469,47 +432,34 @@ export default function Social() {
     if (!q.trim()) { setSearchResults([]); setThreadSearch([]); return; }
 
     searchTimeout.current = setTimeout(async () => {
-      const { data: users } = await supabase
-        .from('profiles')
-        .select('id, username, avatar_url')
-        .ilike('username', `%${q}%`)
-        .neq('id', user.id)
-        .limit(10);
-      // Filter out blocked users from search results
-      setSearchResults((users || []).filter(u => !blockedIds.includes(u.id)));
+      try {
+        const [{ data: users }, { data: thr }] = await withTimeout(Promise.all([
+          supabase.from('profiles').select('id, username, avatar_url').ilike('username', `%${q}%`).neq('id', user.id).limit(10),
+          supabase.from('threads').select('id, user_id, content, likes_count, created_at').ilike('content', `%${q}%`).order('likes_count', { ascending: false }).limit(20),
+        ]));
 
-      const { data: thr } = await supabase
-        .from('threads')
-        .select('id, user_id, content, likes_count, created_at')
-        .ilike('content', `%${q}%`)
-        .order('likes_count', { ascending: false })
-        .limit(20);
+        if (mounted.current) setSearchResults((users || []).filter(u => !blockedIds.includes(u.id)));
 
-      if (thr && thr.length > 0) {
-        const thrUserIds = [...new Set(thr.map(t => t.user_id))];
-        const { data: thrProfiles } = await supabase
-          .from('profiles').select('id, username, avatar_url').in('id', thrUserIds);
-        (thrProfiles || []).forEach(primeProfile);
-        const thrProfileMap = Object.fromEntries((thrProfiles || []).map(p => [p.id, p]));
-        const { data: myLikes } = await supabase
-          .from('thread_likes').select('thread_id').eq('user_id', user.id);
-        const likedSet = new Set((myLikes || []).map(l => l.thread_id));
-        setThreadSearch(
-          thr
-            .filter(t => !blockedIds.includes(t.user_id))
-            .map(t => {
+        if (thr && thr.length > 0) {
+          const thrUserIds = [...new Set(thr.map(t => t.user_id))];
+          const [{ data: thrProfiles }, { data: myLikes }] = await withTimeout(Promise.all([
+            supabase.from('profiles').select('id, username, avatar_url').in('id', thrUserIds),
+            supabase.from('thread_likes').select('thread_id').eq('user_id', user.id),
+          ]));
+          (thrProfiles || []).forEach(primeProfile);
+          const thrProfileMap = Object.fromEntries((thrProfiles || []).map(p => [p.id, p]));
+          const likedSet = new Set((myLikes || []).map(l => l.thread_id));
+          if (mounted.current) setThreadSearch(
+            thr.filter(t => !blockedIds.includes(t.user_id)).map(t => {
               const prof = thrProfileMap[t.user_id] || {};
-              return {
-                ...t,
-                username:    prof.username   || '?',
-                avatar_url:  prof.avatar_url || null,
-                liked_by_me: likedSet.has(t.id),
-                comments:    [],
-              };
+              return { ...t, username: prof.username || '?', avatar_url: prof.avatar_url || null, liked_by_me: likedSet.has(t.id), comments: [] };
             })
-        );
-      } else {
-        setThreadSearch([]);
+          );
+        } else {
+          if (mounted.current) setThreadSearch([]);
+        }
+      } catch (e) {
+        console.error('[Social] search failed:', e);
       }
     }, 350);
   };
@@ -522,10 +472,7 @@ export default function Social() {
     const { error } = await supabase.from('friendships').insert([{ requester_id: user.id, addressee_id: targetId }]);
     if (!error) {
       showToast('Friend request sent!');
-      await supabase.from('notifications').insert({
-        user_id: targetId, actor_id: user.id, type: 'friend_request',
-        message: `@${user.user_metadata?.username || 'Someone'} sent you a friend request`,
-      });
+      await supabase.from('notifications').insert({ user_id: targetId, actor_id: user.id, type: 'friend_request', message: `@${user.user_metadata?.username || 'Someone'} sent you a friend request` });
       loadSocial();
     }
   };
@@ -535,28 +482,23 @@ export default function Social() {
 
   function showToast(msg) { setToast(msg); setTimeout(() => setToast(''), 3000); }
 
-  // Filter blocked users from threads feed
-  const visibleThreads = (searchQuery.trim() ? threadSearch : threads)
-    .filter(t => !blockedIds.includes(t.user_id));
+  const visibleThreads = (searchQuery.trim() ? threadSearch : threads).filter(t => !blockedIds.includes(t.user_id));
 
   return (
     <div className="social-page page-wrapper fade-in">
-      {/* ── Header ── */}
       <div className="social-header">
         <div>
           <h1 className="page-title">Social</h1>
           <p className="page-subtitle">Connect, message, and share thoughts.</p>
         </div>
-        <button className="btn-create-group" onClick={() => navigate('/create-group')}>
-          + New Group
-        </button>
+        <button className="btn-create-group" onClick={() => navigate('/create-group')}>+ New Group</button>
       </div>
 
       <SearchBar placeholder="Search users or threads…" onSearch={handleSearch} />
 
       <div className="social-columns">
 
-        {/* ════════ LEFT: Messages ════════ */}
+        {/* ════ LEFT: Messages ════ */}
         <div className="social-col">
           <div className="col-header">
             <h2 className="col-title">Messages</h2>
@@ -566,7 +508,6 @@ export default function Social() {
           </div>
 
           <div className="col-scroll">
-            {/* User search results */}
             {searchResults.length > 0 && (
               <div className="col-section">
                 <p className="col-section-label">People</p>
@@ -594,12 +535,9 @@ export default function Social() {
               </div>
             )}
 
-            {/* Pending requests */}
             {!loadingMessages && requests.length > 0 && (
               <div className="col-section">
-                <p className="col-section-label">
-                  Requests <span className="count-badge">{requests.length}</span>
-                </p>
+                <p className="col-section-label">Requests <span className="count-badge">{requests.length}</span></p>
                 <div className="user-list">
                   {requests.map(r => (
                     <div key={r.id} className="user-card">
@@ -619,14 +557,16 @@ export default function Social() {
               </div>
             )}
 
-            {/* Conversations */}
             <div className="col-section">
               {loadingMessages ? (
                 <div className="loading-center"><div className="spinner" /></div>
-              ) : friends.length === 0 && groupChats.length === 0 ? (
-                <div className="empty-state-col">
-                  <p>No conversations yet. Add a friend to get started!</p>
+              ) : messagesError ? (
+                <div className="error-state">
+                  <p>Couldn't load messages.</p>
+                  <button className="retry-btn" onClick={loadSocial}>Try Again</button>
                 </div>
+              ) : friends.length === 0 && groupChats.length === 0 ? (
+                <div className="empty-state-col"><p>No conversations yet. Add a friend to get started!</p></div>
               ) : (
                 <div className="user-list">
                   {groupChats.map(g => (
@@ -659,7 +599,7 @@ export default function Social() {
           </div>
         </div>
 
-        {/* ════════ RIGHT: Threads ════════ */}
+        {/* ════ RIGHT: Threads ════ */}
         <div className="social-col">
           <div className="col-header">
             <h2 className="col-title">Threads</h2>
@@ -667,31 +607,15 @@ export default function Social() {
           </div>
 
           <div className="col-scroll">
-            {/* Compose */}
             {!searchQuery && (
               <div className="thread-compose">
-                <Avatar
-                  url={profile?.avatar_url}
-                  username={profile?.username || user?.email}
-                  size={34}
-                  className="thread-compose-avatar"
-                />
+                <Avatar url={profile?.avatar_url} username={profile?.username || user?.email} size={34} className="thread-compose-avatar" />
                 <div className="thread-compose-right">
-                  <textarea
-                    className="thread-compose-input"
-                    placeholder="What are you thinking about?"
-                    value={newThreadText}
-                    onChange={e => setNewThreadText(e.target.value)}
-                    rows={2}
-                    maxLength={500}
-                  />
+                  <textarea className="thread-compose-input" placeholder="What are you thinking about?"
+                    value={newThreadText} onChange={e => setNewThreadText(e.target.value)} rows={2} maxLength={500} />
                   <div className="thread-compose-footer">
                     <span className="thread-compose-count">{newThreadText.length}/500</span>
-                    <button
-                      className="btn-post-thread"
-                      onClick={postThread}
-                      disabled={postingThread || !newThreadText.trim()}
-                    >
+                    <button className="btn-post-thread" onClick={postThread} disabled={postingThread || !newThreadText.trim()}>
                       {postingThread ? '…' : 'Post'}
                     </button>
                   </div>
@@ -699,9 +623,13 @@ export default function Social() {
               </div>
             )}
 
-            {/* Thread list */}
             {loadingThreads ? (
               <div className="loading-center"><div className="spinner" /></div>
+            ) : threadsError ? (
+              <div className="error-state">
+                <p>Couldn't load threads.</p>
+                <button className="retry-btn" onClick={loadThreads}>Try Again</button>
+              </div>
             ) : visibleThreads.length === 0 ? (
               <div className="empty-state-col">
                 <p>{searchQuery ? 'No threads match your search.' : 'No threads yet. Be the first to post!'}</p>
@@ -709,14 +637,8 @@ export default function Social() {
             ) : (
               <div className="threads-list">
                 {visibleThreads.map(t => (
-                  <ThreadCard
-                    key={t.id}
-                    thread={t}
-                    currentUser={user}
-                    onLike={likeThread}
-                    onDelete={deleteThread}
-                    onCommentSubmit={submitComment}
-                  />
+                  <ThreadCard key={t.id} thread={t} currentUser={user}
+                    onLike={likeThread} onDelete={deleteThread} onCommentSubmit={submitComment} />
                 ))}
               </div>
             )}

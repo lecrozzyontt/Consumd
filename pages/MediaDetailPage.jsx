@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { supabase } from '../services/supabase';
 import { useAuth } from '../context/AuthContext';
@@ -9,6 +9,15 @@ import RatingStars from '../components/RatingStars';
 import ReviewInteractions from '../components/ReviewInteractions';
 import './MediaDetailPage.css';
 
+const LOAD_TIMEOUT_MS = 10000;
+
+function withTimeout(promise, ms = LOAD_TIMEOUT_MS) {
+  const timeout = new Promise((_, reject) =>
+    setTimeout(() => reject(new Error('Request timed out')), ms)
+  );
+  return Promise.race([promise, timeout]);
+}
+
 const TYPE_COLORS = {
   movie:   '#c9a84c',
   show:    '#60a5fa',
@@ -16,6 +25,13 @@ const TYPE_COLORS = {
   episode: '#60a5fa',
   book:    '#4ade80',
   game:    '#c084fc',
+};
+
+const TYPE_LABELS = {
+  movie: 'Film',
+  show:  'Show',
+  book:  'Book',
+  game:  'Game',
 };
 
 const ALL_RATING_VALUES = [5, 4.5, 4, 3.5, 3, 2.5, 2, 1.5, 1, 0.5];
@@ -36,18 +52,25 @@ function episodeCode(season, episode) {
 }
 
 export default function MediaDetailPage() {
-  const navigate   = useNavigate();
-  const location   = useLocation();
-  const { user }   = useAuth();
-  const baseMedia  = location.state?.media;
+  const navigate  = useNavigate();
+  const location  = useLocation();
+  const { user }  = useAuth();
+  const baseMedia = location.state?.media;
 
-  const [details, setDetails]               = useState(null);
-  const [loadingDetails, setLoadingDetails] = useState(true);
-  const [activity, setActivity]             = useState([]);
-  const [userLog, setUserLog]               = useState(null);
-  const [loadingActivity, setLoadingActivity] = useState(true);
-  const [avgRating, setAvgRating]           = useState(null);
-  const [ratingCounts, setRatingCounts]     = useState({});
+  const [details, setDetails]                   = useState(null);
+  const [loadingDetails, setLoadingDetails]     = useState(true);
+  const [activity, setActivity]                 = useState([]);
+  const [userLog, setUserLog]                   = useState(null);
+  const [loadingActivity, setLoadingActivity]   = useState(true);
+  const [activityError, setActivityError]       = useState(false);
+  const [avgRating, setAvgRating]               = useState(null);
+  const [ratingCounts, setRatingCounts]         = useState({});
+
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => { mounted.current = false; };
+  }, []);
 
   useEffect(() => {
     if (!baseMedia) { navigate('/'); return; }
@@ -56,6 +79,7 @@ export default function MediaDetailPage() {
     setUserLog(null);
     setAvgRating(null);
     setRatingCounts({});
+    setActivityError(false);
     fetchDetails();
     fetchActivity();
   }, [baseMedia?.external_id]);
@@ -64,22 +88,26 @@ export default function MediaDetailPage() {
     setLoadingDetails(true);
     try {
       let data = null;
-      if      (baseMedia.media_type === 'movie')   data = await fetchMovieDetails(baseMedia.external_id);
-      else if (baseMedia.media_type === 'show')    data = await fetchShowDetails(baseMedia.external_id);
-      else if (baseMedia.media_type === 'season')  data = await fetchSeasonDetails(baseMedia.show_external_id, baseMedia.season_number);
-      else if (baseMedia.media_type === 'episode') data = await fetchEpisodeDetails(baseMedia.show_external_id, baseMedia.season_number, baseMedia.episode_number);
-      else if (baseMedia.media_type === 'game')    data = await fetchGameDetails(baseMedia.external_id);
-      else if (baseMedia.media_type === 'book')    data = await fetchBookDetails(baseMedia.external_id);
-      setDetails(data ? { ...baseMedia, ...data } : baseMedia);
+      if      (baseMedia.media_type === 'movie')   data = await withTimeout(fetchMovieDetails(baseMedia.external_id));
+      else if (baseMedia.media_type === 'show')    data = await withTimeout(fetchShowDetails(baseMedia.external_id));
+      else if (baseMedia.media_type === 'season')  data = await withTimeout(fetchSeasonDetails(baseMedia.show_external_id, baseMedia.season_number));
+      else if (baseMedia.media_type === 'episode') data = await withTimeout(fetchEpisodeDetails(baseMedia.show_external_id, baseMedia.season_number, baseMedia.episode_number));
+      else if (baseMedia.media_type === 'game')    data = await withTimeout(fetchGameDetails(baseMedia.external_id));
+      else if (baseMedia.media_type === 'book')    data = await withTimeout(fetchBookDetails(baseMedia.external_id));
+      if (mounted.current) setDetails(data ? { ...baseMedia, ...data } : baseMedia);
     } catch {
-      setDetails(baseMedia);
+      // Fall back to base media — detail enrichment is non-critical
+      if (mounted.current) setDetails(baseMedia);
     } finally {
-      setLoadingDetails(false);
+      if (mounted.current) setLoadingDetails(false);
     }
   }
 
   async function fetchActivity() {
+    if (!mounted.current) return;
     setLoadingActivity(true);
+    setActivityError(false);
+
     try {
       let query = supabase
         .from('logs')
@@ -89,7 +117,10 @@ export default function MediaDetailPage() {
       if (baseMedia.external_id) query = query.eq('external_id', baseMedia.external_id);
       else query = query.eq('title', baseMedia.title).eq('media_type', baseMedia.media_type);
 
-      const { data } = await query;
+      const { data, error } = await withTimeout(query);
+      if (error) throw error;
+      if (!mounted.current) return;
+
       const logs = data || [];
       setActivity(logs);
       if (user) setUserLog(logs.find(l => l.user_id === user.id) || null);
@@ -106,9 +137,10 @@ export default function MediaDetailPage() {
         setRatingCounts(counts);
       }
     } catch (e) {
-      console.error('fetchActivity error:', e);
+      console.error('[MediaDetail] fetchActivity failed:', e);
+      if (mounted.current) setActivityError(true);
     } finally {
-      setLoadingActivity(false);
+      if (mounted.current) setLoadingActivity(false);
     }
   }
 
@@ -125,7 +157,6 @@ export default function MediaDetailPage() {
   const isGame    = media.media_type === 'game';
   const isBook    = media.media_type === 'book';
 
-  // Helper: build a season media object from a TMDB season entry + parent show context
   function buildSeasonMedia(season, showMedia) {
     return {
       title:            `${showMedia.title}: ${season.name}`,
@@ -134,9 +165,7 @@ export default function MediaDetailPage() {
       show_external_id: showMedia.external_id,
       show_title:       showMedia.title,
       season_number:    season.season_number,
-      cover_url:        season.poster_path
-                          ? `https://image.tmdb.org/t/p/w342${season.poster_path}`
-                          : showMedia.cover_url,
+      cover_url:        season.poster_path ? `https://image.tmdb.org/t/p/w342${season.poster_path}` : showMedia.cover_url,
       year:             season.air_date ? season.air_date.split('-')[0] : showMedia.year,
       episode_count:    season.episode_count,
       overview:         season.overview,
@@ -145,11 +174,10 @@ export default function MediaDetailPage() {
     };
   }
 
-  // Helper: build an episode media object from a TMDB episode entry + season context
   function buildEpisodeMedia(ep, seasonMedia) {
-    const showTitle  = seasonMedia.show_title || seasonMedia.title.split(':')[0].trim();
-    const showExtId  = seasonMedia.show_external_id;
-    const seasonNum  = seasonMedia.season_number;
+    const showTitle = seasonMedia.show_title || seasonMedia.title.split(':')[0].trim();
+    const showExtId = seasonMedia.show_external_id;
+    const seasonNum = seasonMedia.season_number;
     return {
       title:            `${showTitle}: ${ep.name}`,
       media_type:       'episode',
@@ -170,8 +198,6 @@ export default function MediaDetailPage() {
 
   return (
     <div className="detail-page">
-
-      {/* BACKDROP */}
       <div className="detail-backdrop">
         {(media.backdrop_url || media.cover_url) && (
           <img src={media.backdrop_url || media.cover_url} alt="" className="backdrop-img" />
@@ -193,40 +219,32 @@ export default function MediaDetailPage() {
         <div className="detail-meta">
           <div className="detail-badge-row">
             <span className="detail-type-badge" style={{ color: typeColor, borderColor: typeColor + '50' }}>
-              {isSeason ? 'Season' : isEpisode ? 'Episode' : media.media_type}
+              {isSeason ? 'Season' : isEpisode ? 'Episode' : (TYPE_LABELS[media.media_type] || media.media_type)}
             </span>
             {isEpisode && media.season_number && media.episode_number && (
-              <span className="detail-episode-code" style={{ color: typeColor }}>
-                {episodeCode(media.season_number, media.episode_number)}
-              </span>
+              <span className="detail-episode-code" style={{ color: typeColor }}>{episodeCode(media.season_number, media.episode_number)}</span>
             )}
             {isSeason && media.season_number && (
-              <span className="detail-episode-code" style={{ color: typeColor }}>
-                Season {media.season_number}
-              </span>
+              <span className="detail-episode-code" style={{ color: typeColor }}>Season {media.season_number}</span>
             )}
           </div>
 
           <h1 className="detail-title">{media.title}</h1>
-
           {media.tagline && <p className="detail-tagline">"{media.tagline}"</p>}
 
           <div className="detail-sub">
             {media.year && <span className="detail-year">{media.year}</span>}
-            {isMovie  && media.runtime    && <><span className="detail-dot">·</span><span>{runtime(media.runtime)}</span></>}
-            {isShow   && media.seasons    && <><span className="detail-dot">·</span><span>{media.seasons.length} season{media.seasons.length !== 1 ? 's' : ''}</span></>}
-            {isShow   && media.episodes   && <><span className="detail-dot">·</span><span>{media.episodes} episodes</span></>}
+            {isMovie  && media.runtime  && <><span className="detail-dot">·</span><span>{runtime(media.runtime)}</span></>}
+            {isShow   && media.seasons  && <><span className="detail-dot">·</span><span>{media.seasons.length} season{media.seasons.length !== 1 ? 's' : ''}</span></>}
+            {isShow   && media.episodes && <><span className="detail-dot">·</span><span>{media.episodes} episodes</span></>}
             {isSeason && media.episodes?.length  && <><span className="detail-dot">·</span><span>{media.episodes.length} episodes</span></>}
             {isSeason && !media.episodes?.length && media.episode_count && <><span className="detail-dot">·</span><span>{media.episode_count} episodes</span></>}
-            {isEpisode && media.runtime   && <><span className="detail-dot">·</span><span>{runtime(media.runtime)}</span></>}
-            {isGame   && media.playtime   && <><span className="detail-dot">·</span><span>~{media.playtime}h avg playtime</span></>}
-            {media.status                 && <><span className="detail-dot">·</span><span className="detail-status">{media.status}</span></>}
+            {isEpisode && media.runtime && <><span className="detail-dot">·</span><span>{runtime(media.runtime)}</span></>}
+            {isGame   && media.playtime && <><span className="detail-dot">·</span><span>~{media.playtime}h avg playtime</span></>}
+            {media.status               && <><span className="detail-dot">·</span><span className="detail-status">{media.status}</span></>}
           </div>
 
-          {/* Air date for seasons/episodes */}
-          {(isSeason || isEpisode) && media.air_date && (
-            <p className="detail-air-date">Aired {media.air_date}</p>
-          )}
+          {(isSeason || isEpisode) && media.air_date && <p className="detail-air-date">Aired {media.air_date}</p>}
 
           {media.genres?.length > 0 && (
             <div className="detail-genres">
@@ -236,7 +254,6 @@ export default function MediaDetailPage() {
             </div>
           )}
 
-          {/* Community rating */}
           <div className="detail-ratings-row">
             {avgRating && (
               <div className="detail-community-rating">
@@ -245,14 +262,6 @@ export default function MediaDetailPage() {
                 <span className="avg-sub">{activity.filter(l => l.rating).length} ratings</span>
               </div>
             )}
-            {/* {isGame && media.metacritic && (
-              <div className="detail-metacritic">
-                <span className="meta-score" style={{ color: media.metacritic >= 75 ? '#4ade80' : media.metacritic >= 50 ? '#f59e0b' : '#f87171' }}>
-                  {media.metacritic}
-                </span>
-                <span className="api-sub">Metacritic</span>
-              </div>
-            )} */}
           </div>
 
           {userLog && (
@@ -281,22 +290,15 @@ export default function MediaDetailPage() {
         </section>
       )}
 
-      {/* ── SEASONS (show page only) ── */}
+      {/* SEASONS */}
       {isShow && media.seasons?.length > 0 && !loadingDetails && (
         <section className="detail-section">
-          <h2 className="detail-section-title">
-            Seasons
-            <span className="detail-section-count">{media.seasons.filter(s => s.season_number > 0).length}</span>
-          </h2>
+          <h2 className="detail-section-title">Seasons <span className="detail-section-count">{media.seasons.filter(s => s.season_number > 0).length}</span></h2>
           <div className="seasons-scroll-container">
             {media.seasons.filter(s => s.season_number > 0).map(season => {
               const seasonMedia = buildSeasonMedia(season, media);
               return (
-                <div
-                  key={season.id}
-                  className="season-card fade-in"
-                  onClick={() => navigate('/media', { state: { media: seasonMedia } })}
-                >
+                <div key={season.id} className="season-card fade-in" onClick={() => navigate('/media', { state: { media: seasonMedia } })}>
                   <div className="season-poster">
                     {seasonMedia.cover_url
                       ? <img src={seasonMedia.cover_url} alt={season.name} loading="lazy" />
@@ -307,11 +309,7 @@ export default function MediaDetailPage() {
                     <h3 className="season-name">{season.name}</h3>
                     <p className="season-episodes">{season.episode_count} Episodes</p>
                     {season.air_date && <p className="season-year">{season.air_date.split('-')[0]}</p>}
-                    {season.overview && (
-                      <p className="season-overview" title={season.overview}>
-                        {season.overview.length > 80 ? season.overview.slice(0, 80) + '...' : season.overview}
-                      </p>
-                    )}
+                    {season.overview && <p className="season-overview" title={season.overview}>{season.overview.length > 80 ? season.overview.slice(0, 80) + '...' : season.overview}</p>}
                   </div>
                 </div>
               );
@@ -320,59 +318,29 @@ export default function MediaDetailPage() {
         </section>
       )}
 
-      {/* ── EPISODES (season page only) ── */}
+      {/* EPISODES */}
       {isSeason && !loadingDetails && (
         <section className="detail-section">
-          <h2 className="detail-section-title">
-            Episodes
-            {media.episodes?.length > 0 && (
-              <span className="detail-section-count">{media.episodes.length}</span>
-            )}
-          </h2>
-
-          {loadingDetails ? (
-            <div className="activity-loading"><div className="spinner" /></div>
-          ) : media.episodes?.length > 0 ? (
+          <h2 className="detail-section-title">Episodes {media.episodes?.length > 0 && <span className="detail-section-count">{media.episodes.length}</span>}</h2>
+          {media.episodes?.length > 0 ? (
             <div className="episodes-list">
               {media.episodes.map(ep => {
                 const epMedia = buildEpisodeMedia(ep, media);
                 return (
-                  <div
-                    key={ep.id ?? ep.episode_number}
-                    className="episode-card"
-                    onClick={() => navigate('/media', { state: { media: epMedia } })}
-                  >
+                  <div key={ep.id ?? ep.episode_number} className="episode-card" onClick={() => navigate('/media', { state: { media: epMedia } })}>
                     <div className="episode-still">
-                      {ep.still_path
-                        ? <img src={`https://image.tmdb.org/t/p/w300${ep.still_path}`} alt={ep.name} loading="lazy" />
-                        : <div className="episode-still-placeholder">▶</div>
-                      }
+                      {ep.still_path ? <img src={`https://image.tmdb.org/t/p/w300${ep.still_path}`} alt={ep.name} loading="lazy" /> : <div className="episode-still-placeholder">▶</div>}
                     </div>
                     <div className="episode-info">
                       <div className="episode-header">
-                        <span className="episode-code" style={{ color: typeColor }}>
-                          {episodeCode(media.season_number, ep.episode_number)}
-                        </span>
-                        {ep.runtime && (
-                          <span className="episode-runtime">{runtime(ep.runtime)}</span>
-                        )}
-                        {ep.air_date && (
-                          <span className="episode-date">{ep.air_date}</span>
-                        )}
+                        <span className="episode-code" style={{ color: typeColor }}>{episodeCode(media.season_number, ep.episode_number)}</span>
+                        {ep.runtime  && <span className="episode-runtime">{runtime(ep.runtime)}</span>}
+                        {ep.air_date && <span className="episode-date">{ep.air_date}</span>}
                       </div>
                       <h3 className="episode-name">{ep.name}</h3>
-                      {ep.overview && (
-                        <p className="episode-overview">{ep.overview}</p>
-                      )}
+                      {ep.overview && <p className="episode-overview">{ep.overview}</p>}
                     </div>
-                    <button
-                      className="episode-log-btn"
-                      onClick={e => { e.stopPropagation(); navigate('/log', { state: { media: epMedia } }); }}
-                      title="Log this episode"
-                      style={{ borderColor: typeColor + '50', color: typeColor }}
-                    >
-                      +
-                    </button>
+                    <button className="episode-log-btn" onClick={e => { e.stopPropagation(); navigate('/log', { state: { media: epMedia } }); }} title="Log this episode" style={{ borderColor: typeColor + '50', color: typeColor }}>+</button>
                   </div>
                 );
               })}
@@ -383,21 +351,15 @@ export default function MediaDetailPage() {
         </section>
       )}
 
-      {/* ── EPISODE: Guest Stars ── */}
+      {/* EPISODE: Guest Stars */}
       {isEpisode && media.guest_stars?.length > 0 && !loadingDetails && (
         <section className="detail-section">
-          <h2 className="detail-section-title">
-            Guest Stars
-            <span className="detail-section-count">{media.guest_stars.length}</span>
-          </h2>
+          <h2 className="detail-section-title">Guest Stars <span className="detail-section-count">{media.guest_stars.length}</span></h2>
           <div className="cast-grid">
             {media.guest_stars.map(person => (
               <div key={person.id} className="cast-card">
                 <div className="cast-photo">
-                  {person.profile_path
-                    ? <img src={`https://image.tmdb.org/t/p/w185${person.profile_path}`} alt={person.name} loading="lazy" />
-                    : <div className="cast-photo-placeholder">{person.name?.[0]}</div>
-                  }
+                  {person.profile_path ? <img src={`https://image.tmdb.org/t/p/w185${person.profile_path}`} alt={person.name} loading="lazy" /> : <div className="cast-photo-placeholder">{person.name?.[0]}</div>}
                 </div>
                 <p className="cast-name">{person.name}</p>
                 <p className="cast-character">{person.character}</p>
@@ -407,17 +369,12 @@ export default function MediaDetailPage() {
         </section>
       )}
 
-      {/* ── EPISODE: Crew ── */}
+      {/* EPISODE: Crew */}
       {isEpisode && media.crew?.length > 0 && !loadingDetails && (
         <section className="detail-section">
           <h2 className="detail-section-title">Crew</h2>
           <div className="crew-list">
-            {media.crew.map((c, i) => (
-              <div key={i} className="crew-item">
-                <span className="crew-role">{c.job}</span>
-                <span className="crew-name">{c.name}</span>
-              </div>
-            ))}
+            {media.crew.map((c, i) => <div key={i} className="crew-item"><span className="crew-role">{c.job}</span><span className="crew-name">{c.name}</span></div>)}
           </div>
         </section>
       )}
@@ -428,27 +385,11 @@ export default function MediaDetailPage() {
           <section className="detail-section">
             <h2 className="detail-section-title">{isMovie ? 'Crew' : 'Created By'}</h2>
             <div className="crew-list">
-              {isMovie && media.director && (
-                <div className="crew-item">
-                  <span className="crew-role">Director</span>
-                  <span className="crew-name">{media.director}</span>
-                </div>
-              )}
-              {isShow && media.creators?.map(c => (
-                <div key={c} className="crew-item">
-                  <span className="crew-role">Creator</span>
-                  <span className="crew-name">{c}</span>
-                </div>
-              ))}
-              {isMovie && media.writers?.map(w => (
-                <div key={w} className="crew-item">
-                  <span className="crew-role">Writer</span>
-                  <span className="crew-name">{w}</span>
-                </div>
-              ))}
+              {isMovie && media.director && <div className="crew-item"><span className="crew-role">Director</span><span className="crew-name">{media.director}</span></div>}
+              {isShow  && media.creators?.map(c => <div key={c} className="crew-item"><span className="crew-role">Creator</span><span className="crew-name">{c}</span></div>)}
+              {isMovie && media.writers?.map(w => <div key={w} className="crew-item"><span className="crew-role">Writer</span><span className="crew-name">{w}</span></div>)}
             </div>
           </section>
-
           {media.cast?.length > 0 && (
             <section className="detail-section">
               <h2 className="detail-section-title">Cast</h2>
@@ -456,10 +397,7 @@ export default function MediaDetailPage() {
                 {media.cast.map(person => (
                   <div key={person.id} className="cast-card">
                     <div className="cast-photo">
-                      {person.profile_path
-                        ? <img src={`https://image.tmdb.org/t/p/w185${person.profile_path}`} alt={person.name} loading="lazy" />
-                        : <div className="cast-photo-placeholder">{person.name?.[0]}</div>
-                      }
+                      {person.profile_path ? <img src={`https://image.tmdb.org/t/p/w185${person.profile_path}`} alt={person.name} loading="lazy" /> : <div className="cast-photo-placeholder">{person.name?.[0]}</div>}
                     </div>
                     <p className="cast-name">{person.name}</p>
                     <p className="cast-character">{person.character}</p>
@@ -471,7 +409,7 @@ export default function MediaDetailPage() {
         </>
       )}
 
-      {/* AUTHORS — books */}
+      {/* AUTHORS */}
       {isBook && media.authors?.length > 0 && (
         <section className="detail-section">
           <h2 className="detail-section-title">Author{media.authors.length > 1 ? 's' : ''}</h2>
@@ -489,143 +427,64 @@ export default function MediaDetailPage() {
         </section>
       )}
 
-      {/* GAME DEV / PUBLISHERS / PLATFORMS */}
+      {/* GAME DETAILS */}
       {isGame && !loadingDetails && (
         <section className="detail-section">
           <h2 className="detail-section-title">Details</h2>
           <div className="detail-facts">
-            {media.developers?.length > 0 && (
-              <div className="fact-row">
-                <span className="fact-label">Developer</span>
-                <span className="fact-value">{media.developers.join(', ')}</span>
-              </div>
-            )}
-            {media.publishers?.length > 0 && (
-              <div className="fact-row">
-                <span className="fact-label">Publisher</span>
-                <span className="fact-value">{media.publishers.join(', ')}</span>
-              </div>
-            )}
-            {media.platforms?.length > 0 && (
-              <div className="fact-row">
-                <span className="fact-label">Platforms</span>
-                <span className="fact-value">{media.platforms.join(', ')}</span>
-              </div>
-            )}
-            {media.esrb && (
-              <div className="fact-row">
-                <span className="fact-label">ESRB</span>
-                <span className="fact-value">{media.esrb}</span>
-              </div>
-            )}
-            {media.release_date && (
-              <div className="fact-row">
-                <span className="fact-label">Released</span>
-                <span className="fact-value">{media.release_date}</span>
-              </div>
-            )}
+            {media.developers?.length > 0 && <div className="fact-row"><span className="fact-label">Developer</span><span className="fact-value">{media.developers.join(', ')}</span></div>}
+            {media.publishers?.length > 0 && <div className="fact-row"><span className="fact-label">Publisher</span><span className="fact-value">{media.publishers.join(', ')}</span></div>}
+            {media.platforms?.length > 0  && <div className="fact-row"><span className="fact-label">Platforms</span><span className="fact-value">{media.platforms.join(', ')}</span></div>}
+            {media.esrb                   && <div className="fact-row"><span className="fact-label">ESRB</span><span className="fact-value">{media.esrb}</span></div>}
+            {media.release_date           && <div className="fact-row"><span className="fact-label">Released</span><span className="fact-value">{media.release_date}</span></div>}
           </div>
         </section>
       )}
 
-      {/* MOVIE PRODUCTION DETAILS */}
+      {/* MOVIE PRODUCTION */}
       {isMovie && !loadingDetails && (media.production_companies?.length || media.budget || media.revenue || media.original_language) && (
         <section className="detail-section">
           <h2 className="detail-section-title">Production</h2>
           <div className="detail-facts">
-            {media.release_date && (
-              <div className="fact-row">
-                <span className="fact-label">Release Date</span>
-                <span className="fact-value">{media.release_date}</span>
-              </div>
-            )}
-            {media.production_companies?.length > 0 && (
-              <div className="fact-row">
-                <span className="fact-label">Studio</span>
-                <span className="fact-value">{media.production_companies.join(', ')}</span>
-              </div>
-            )}
-            {media.budget > 0 && (
-              <div className="fact-row">
-                <span className="fact-label">Budget</span>
-                <span className="fact-value">{formatMoney(media.budget)}</span>
-              </div>
-            )}
-            {media.revenue > 0 && (
-              <div className="fact-row">
-                <span className="fact-label">Box Office</span>
-                <span className="fact-value">{formatMoney(media.revenue)}</span>
-              </div>
-            )}
-            {media.original_language && (
-              <div className="fact-row">
-                <span className="fact-label">Language</span>
-                <span className="fact-value">{media.original_language.toUpperCase()}</span>
-              </div>
-            )}
+            {media.release_date                   && <div className="fact-row"><span className="fact-label">Release Date</span><span className="fact-value">{media.release_date}</span></div>}
+            {media.production_companies?.length > 0 && <div className="fact-row"><span className="fact-label">Studio</span><span className="fact-value">{media.production_companies.join(', ')}</span></div>}
+            {media.budget > 0                     && <div className="fact-row"><span className="fact-label">Budget</span><span className="fact-value">{formatMoney(media.budget)}</span></div>}
+            {media.revenue > 0                    && <div className="fact-row"><span className="fact-label">Box Office</span><span className="fact-value">{formatMoney(media.revenue)}</span></div>}
+            {media.original_language              && <div className="fact-row"><span className="fact-label">Language</span><span className="fact-value">{media.original_language.toUpperCase()}</span></div>}
           </div>
         </section>
       )}
 
-      {/* SHOW NETWORK DETAILS */}
+      {/* SHOW DETAILS */}
       {isShow && !loadingDetails && (media.networks?.length || media.first_air_date) && (
         <section className="detail-section">
           <h2 className="detail-section-title">Details</h2>
           <div className="detail-facts">
-            {media.networks?.length > 0 && (
-              <div className="fact-row">
-                <span className="fact-label">Network</span>
-                <span className="fact-value">{media.networks.join(', ')}</span>
-              </div>
-            )}
-            {media.first_air_date && (
-              <div className="fact-row">
-                <span className="fact-label">First Aired</span>
-                <span className="fact-value">{media.first_air_date}</span>
-              </div>
-            )}
-            {media.last_air_date && media.last_air_date !== media.first_air_date && (
-              <div className="fact-row">
-                <span className="fact-label">Last Aired</span>
-                <span className="fact-value">{media.last_air_date}</span>
-              </div>
-            )}
-            {media.episode_runtime && (
-              <div className="fact-row">
-                <span className="fact-label">Episode Length</span>
-                <span className="fact-value">{runtime(media.episode_runtime)}</span>
-              </div>
-            )}
-            {media.original_language && (
-              <div className="fact-row">
-                <span className="fact-label">Language</span>
-                <span className="fact-value">{media.original_language.toUpperCase()}</span>
-              </div>
-            )}
+            {media.networks?.length > 0 && <div className="fact-row"><span className="fact-label">Network</span><span className="fact-value">{media.networks.join(', ')}</span></div>}
+            {media.first_air_date       && <div className="fact-row"><span className="fact-label">First Aired</span><span className="fact-value">{media.first_air_date}</span></div>}
+            {media.last_air_date && media.last_air_date !== media.first_air_date && <div className="fact-row"><span className="fact-label">Last Aired</span><span className="fact-value">{media.last_air_date}</span></div>}
+            {media.episode_runtime      && <div className="fact-row"><span className="fact-label">Episode Length</span><span className="fact-value">{runtime(media.episode_runtime)}</span></div>}
+            {media.original_language    && <div className="fact-row"><span className="fact-label">Language</span><span className="fact-value">{media.original_language.toUpperCase()}</span></div>}
           </div>
         </section>
       )}
 
-      {/* SCREENSHOTS — games */}
+      {/* SCREENSHOTS */}
       {isGame && media.screenshots?.length > 0 && (
         <section className="detail-section">
           <h2 className="detail-section-title">Screenshots</h2>
           <div className="screenshots-grid">
-            {media.screenshots.map((url, i) => (
-              <img key={i} src={url} alt={`Screenshot ${i + 1}`} className="screenshot-img" loading="lazy" />
-            ))}
+            {media.screenshots.map((url, i) => <img key={i} src={url} alt={`Screenshot ${i + 1}`} className="screenshot-img" loading="lazy" />)}
           </div>
         </section>
       )}
 
-      {/* KEYWORDS / THEMES */}
+      {/* KEYWORDS */}
       {media.keywords?.length > 0 && (
         <section className="detail-section">
           <h2 className="detail-section-title">Themes & Tags</h2>
           <div className="keywords-wrap">
-            {media.keywords.map(k => (
-              <span key={k} className="keyword-tag">{k}</span>
-            ))}
+            {media.keywords.map(k => <span key={k} className="keyword-tag">{k}</span>)}
           </div>
         </section>
       )}
@@ -635,9 +494,7 @@ export default function MediaDetailPage() {
         <section className="detail-section">
           <h2 className="detail-section-title">Subjects</h2>
           <div className="keywords-wrap">
-            {media.subjects.map(s => (
-              <span key={s} className="keyword-tag">{s}</span>
-            ))}
+            {media.subjects.map(s => <span key={s} className="keyword-tag">{s}</span>)}
           </div>
         </section>
       )}
@@ -655,10 +512,7 @@ export default function MediaDetailPage() {
                     <RatingStars rating={n} readOnly={true} size="sm" />
                   </div>
                   <div className="dist-bar-wrap" style={{ flex: 1, backgroundColor: 'var(--bg-lighter)', height: '6px', borderRadius: '4px', overflow: 'hidden' }}>
-                    <div
-                      className="dist-bar"
-                      style={{ width: `${(count / maxDist) * 100}%`, background: typeColor, height: '100%', borderRadius: '4px' }}
-                    />
+                    <div className="dist-bar" style={{ width: `${(count / maxDist) * 100}%`, background: typeColor, height: '100%', borderRadius: '4px' }} />
                   </div>
                   <span className="dist-count" style={{ width: '20px', color: 'var(--text-muted)' }}>{count}</span>
                 </div>
@@ -677,6 +531,11 @@ export default function MediaDetailPage() {
 
         {loadingActivity ? (
           <div className="activity-loading"><div className="spinner" /></div>
+        ) : activityError ? (
+          <div className="error-state">
+            <p>Couldn't load activity.</p>
+            <button className="retry-btn" onClick={fetchActivity}>Try Again</button>
+          </div>
         ) : activity.length === 0 ? (
           <div className="activity-empty"><p>No one has logged this yet. Be the first!</p></div>
         ) : (
@@ -695,9 +554,7 @@ export default function MediaDetailPage() {
                       {log.profiles?.username || 'User'}
                       {log.user_id === user?.id && <span className="activity-you"> (you)</span>}
                     </span>
-                    <span className="activity-status" style={{ color: typeColor }}>
-                      {log.status.replace('_', ' ')}
-                    </span>
+                    <span className="activity-status" style={{ color: typeColor }}>{log.status.replace('_', ' ')}</span>
                   </div>
                   {typeof log.rating === 'number' && (
                     <div className="activity-stars" style={{ display: 'inline-flex', marginTop: '0.25rem' }}>

@@ -4,8 +4,17 @@ import { useAuth } from '../context/AuthContext';
 import RatingStars from './RatingStars';
 import './LogModal.css';
 
+const SAVE_TIMEOUT_MS = 10000;
+
+function withTimeout(promise, ms = SAVE_TIMEOUT_MS) {
+  const timeout = new Promise((_, reject) =>
+    setTimeout(() => reject(new Error('Request timed out')), ms)
+  );
+  return Promise.race([promise, timeout]);
+}
+
 const TYPE_LABELS = {
-  movie:   'Movie',
+  movie:   'Film',
   show:    'Show',
   season:  'Season',
   episode: 'Episode',
@@ -16,71 +25,62 @@ const TYPE_LABELS = {
 export default function LogModal({ media, onClose, onSaved }) {
   const { user } = useAuth();
 
-  // Calculate today's date in local timezone for the default value
-  const todayStr = new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().split('T')[0];
+  const todayStr = new Date(Date.now() - new Date().getTimezoneOffset() * 60000)
+    .toISOString().split('T')[0];
 
-  const [rating, setRating]       = useState(0);
-  const [notes, setNotes]         = useState('');
-  const [status, setStatus]       = useState('completed');
+  const [rating, setRating]         = useState(0);
+  const [notes, setNotes]           = useState('');
+  const [status, setStatus]         = useState('completed');
   const [loggedDate, setLoggedDate] = useState(todayStr);
-  const [loading, setLoading]     = useState(false);
-  const [error, setError]         = useState('');
+  const [loading, setLoading]       = useState(false);
+  const [error, setError]           = useState('');
 
   if (!media) return null;
 
   const handleSave = async () => {
-    if (!user) {
-      setError('User not authenticated.');
-      return;
-    }
+    if (!user) { setError('Not authenticated.'); return; }
 
     setLoading(true);
     setError('');
 
     try {
-      // Append time to prevent timezone shift issues when saving
       const finalDate = new Date(`${loggedDate}T12:00:00`).toISOString();
 
-      const { data, error } = await supabase
-        .from('logs')
-        .insert([{
-          user_id:            user.id,
-          title:              media.title || '',
-          media_type:         media.media_type || 'movie',
-          creator:            media.creator || '',
-          year:               media.year ? parseInt(media.year) : null,
-          cover_url:          media.cover_url || media.coverImage || null,
-          genre:              media.genre || '',
-          external_id:        media.external_id || '',
-          rating:             rating > 0 ? rating : null,
-          review:             notes.trim() || null,
-          status:             status || 'completed',
-          logged_at:          finalDate,
+      const { error: saveError } = await withTimeout(
+        supabase.from('logs').insert([{
+          user_id:     user.id,
+          title:       media.title || '',
+          media_type:  media.media_type || 'movie',
+          creator:     media.creator || '',
+          year:        media.year ? parseInt(media.year) : null,
+          cover_url:   media.cover_url || media.coverImage || null,
+          genre:       media.genre || '',
+          external_id: media.external_id || '',
+          rating:      rating > 0 ? rating : null,
+          review:      notes.trim() || null,
+          status:      status || 'completed',
+          logged_at:   finalDate,
         }])
-        .select();
+      );
 
-      if (error) {
-        console.error('Insert error:', error);
-        setError(error.message);
-      } else {
-        console.log('Saved successfully:', data);
-        if (onSaved) {
-          onSaved();
-        } else {
-          onClose();
-        }
-      }
+      if (saveError) throw saveError;
+      if (onSaved) onSaved();
+      else onClose();
     } catch (err) {
-      console.error('Unexpected error:', err);
-      setError(err.message);
+      console.error('[LogModal] save failed:', err);
+      const isTimeout = err.message === 'Request timed out';
+      setError(isTimeout
+        ? 'Save timed out — check your connection and try again.'
+        : (err.message || 'Something went wrong.')
+      );
     } finally {
       setLoading(false);
     }
   };
 
   const STATUS_OPTIONS = [
-    { value: 'completed',   label: '✓ Completed'  },
-    { value: 'in_progress', label: '▶ In Progress' },
+    { value: 'completed',   label: '✓ Completed'       },
+    { value: 'in_progress', label: '▶ In Progress'      },
     { value: 'want',        label: '＋ Want to Consume' },
   ];
 
@@ -98,7 +98,7 @@ export default function LogModal({ media, onClose, onSaved }) {
           <div className="modal-meta">
             <span className="modal-type">{TYPE_LABELS[media.media_type] || media.media_type}</span>
             <h2 className="modal-title">{media.title}</h2>
-            {media.year && <p className="modal-year">{media.year}</p>}
+            {media.year    && <p className="modal-year">{media.year}</p>}
             {media.creator && <p className="modal-creator">{media.creator}</p>}
           </div>
         </div>
@@ -130,7 +130,6 @@ export default function LogModal({ media, onClose, onSaved }) {
                 required
               />
             </div>
-
             <div className="field-group" style={{ flex: 1 }}>
               <label>Your Rating</label>
               <div className="rating-wrap-center">
@@ -151,10 +150,15 @@ export default function LogModal({ media, onClose, onSaved }) {
             <span className="char-count">{notes.length}/500</span>
           </div>
 
-          {error && <p className="modal-error">{error}</p>}
+          {error && (
+            <div className="modal-error">
+              <p>{error}</p>
+              <button className="retry-btn" onClick={handleSave} disabled={loading}>Try Again</button>
+            </div>
+          )}
 
           <div className="modal-actions">
-            <button className="btn-cancel" onClick={onClose}>Cancel</button>
+            <button className="btn-cancel" onClick={onClose} disabled={loading}>Cancel</button>
             <button className="btn-save" onClick={handleSave} disabled={loading}>
               {loading ? <span className="btn-spinner" /> : 'Save to Log'}
             </button>

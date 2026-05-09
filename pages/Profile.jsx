@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { supabase } from '../services/supabase';
 import { useAuth } from '../context/AuthContext';
@@ -9,6 +9,15 @@ import ReviewInteractions from '../components/ReviewInteractions';
 import Avatar from '../components/Avatar';
 import './Profile.css';
 
+const LOAD_TIMEOUT_MS = 10000;
+
+function withTimeout(promise, ms = LOAD_TIMEOUT_MS) {
+  const timeout = new Promise((_, reject) =>
+    setTimeout(() => reject(new Error('Request timed out')), ms)
+  );
+  return Promise.race([promise, timeout]);
+}
+
 const TYPE_COLORS = {
   movie:   '#c9a84c',
   show:    '#60a5fa',
@@ -18,10 +27,17 @@ const TYPE_COLORS = {
   game:    '#c084fc',
 };
 
+const TYPE_LABELS = {
+  movie: 'Film',
+  show:  'Show',
+  book:  'Book',
+  game:  'Game',
+};
+
 const TABS = [
-  { key: 'completed',   label: 'Journal'    },
-  { key: 'in_progress', label: 'Currently'  },
-  { key: 'want',        label: 'Watchlist'  },
+  { key: 'completed',   label: 'Journal'   },
+  { key: 'in_progress', label: 'Currently' },
+  { key: 'want',        label: 'Watchlist' },
 ];
 
 export default function Profile() {
@@ -29,25 +45,33 @@ export default function Profile() {
 
   const profileCache = () => profile?.id ? cacheGet('profile:' + profile.id) : null;
 
-  const [logs, setLogs]             = useState(() => profileCache()?.logs   || []);
-  const [stats, setStats]           = useState(() => profileCache()?.stats  || null);
-  const [top4, setTop4]             = useState(() => profileCache()?.top4   || []);
-  const [recent, setRecent]         = useState(() => profileCache()?.recent || []);
-  const [activeTab, setActiveTab]   = useState('completed');
-  const [loading, setLoading]       = useState(!profileCache());
-  const [deletingId, setDeletingId] = useState(null);
+  const [logs,   setLogs]   = useState(() => profileCache()?.logs   || []);
+  const [stats,  setStats]  = useState(() => profileCache()?.stats  || null);
+  const [top4,   setTop4]   = useState(() => profileCache()?.top4   || []);
+  const [recent, setRecent] = useState(() => profileCache()?.recent || []);
 
-  const [editingBio, setEditingBio] = useState(false);
-  const [bioInput, setBioInput]     = useState('');
-  const [savingBio, setSavingBio]   = useState(false);
+  const [activeTab,   setActiveTab]   = useState('completed');
+  const [loading,     setLoading]     = useState(!profileCache());
+  const [error,       setError]       = useState(false);
+  const [deletingId,  setDeletingId]  = useState(null);
+
+  const [editingBio,  setEditingBio]  = useState(false);
+  const [bioInput,    setBioInput]    = useState('');
+  const [savingBio,   setSavingBio]   = useState(false);
 
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
-  const [avatarUrl, setAvatarUrl]   = useState(null);
+  const [avatarUrl,       setAvatarUrl]       = useState(null);
 
-  const [pickerOpen, setPickerOpen]     = useState(false);
-  const [pickerSlot, setPickerSlot]     = useState(null);
+  const [pickerOpen,   setPickerOpen]   = useState(false);
+  const [pickerSlot,   setPickerSlot]   = useState(null);
   const [pickerSearch, setPickerSearch] = useState('');
-  const [savingTop4, setSavingTop4]     = useState(false);
+  const [savingTop4,   setSavingTop4]   = useState(false);
+
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => { mounted.current = false; };
+  }, []);
 
   useEffect(() => {
     if (profile) {
@@ -57,12 +81,9 @@ export default function Profile() {
     }
   }, [profile?.id]);
 
-  // On tab/app resume, refresh silently — cache means no spinner
-  // ...existing code...
-  // On tab/app resume, refresh silently — cache means no spinner
   useEffect(() => {
     const handle = () => {
-      if (document.visibilityState === 'visible' && profile) {
+      if (document.visibilityState === 'visible' && profile && cacheGet('profile:' + profile.id)) {
         setTimeout(() => loadProfileData(), 150);
       }
     };
@@ -71,29 +92,32 @@ export default function Profile() {
   }, [profile?.id]);
 
   async function loadProfileData() {
-// ...existing code...
-    // Only show spinner if no cached data
+    if (!mounted.current || !profile) return;
     if (!cacheGet('profile:' + profile.id)) setLoading(true);
+    setError(false);
     try {
-      await fetchProfileData();
+      await withTimeout(fetchProfileData());
     } catch (e) {
-      console.error('loadProfileData error:', e);
+      console.error('[Profile] loadProfileData failed:', e);
+      if (mounted.current) setError(true);
     } finally {
-      setLoading(false);
+      if (mounted.current) setLoading(false);
     }
   }
 
   async function fetchProfileData() {
-    const { data } = await supabase
+    const { data, error: fetchError } = await supabase
       .from('logs')
       .select('*')
       .eq('user_id', profile.id)
       .order('logged_at', { ascending: false });
 
-    const allLogs = data || [];
+    if (fetchError) throw fetchError;
+
+    const allLogs   = data || [];
     const storedIds = profile.top4_ids || [];
-    const resolved = storedIds.map(id => allLogs.find(l => l.id === id)).filter(Boolean);
-    const recentLogs = allLogs.slice(0, 10);
+    const resolved  = storedIds.map(id => allLogs.find(l => l.id === id)).filter(Boolean);
+    const recent    = allLogs.slice(0, 10);
 
     const completedLogs = allLogs.filter(l => l.status === 'completed');
     const byType = completedLogs.reduce((acc, l) => {
@@ -101,6 +125,7 @@ export default function Profile() {
       acc[bucket] = (acc[bucket] || 0) + 1;
       return acc;
     }, {});
+
     const newStats = {
       total: completedLogs.length,
       movie: byType.movie || 0,
@@ -109,38 +134,28 @@ export default function Profile() {
       game:  byType.game  || 0,
     };
 
+    if (!mounted.current) return;
     setLogs(allLogs);
-    setRecent(recentLogs);
+    setRecent(recent);
     setTop4(resolved);
     setStats(newStats);
-    cacheSet('profile:' + profile.id, { logs: allLogs, recent: recentLogs, top4: resolved, stats: newStats });
+    cacheSet('profile:' + profile.id, { logs: allLogs, recent, top4: resolved, stats: newStats });
   }
 
   const deleteLog = async (id) => {
     setDeletingId(id);
     await supabase.from('logs').delete().eq('id', id);
-    
-    const updatedLogs = logs.filter(l => l.id !== id);
-    setLogs(updatedLogs);
-    setRecent(prev => prev.filter(l => l.id !== id));
-    setTop4(prev => prev.filter(l => l.id !== id));
-
-    const completedLogs = updatedLogs.filter(l => l.status === 'completed');
+    const updated       = logs.filter(l => l.id !== id);
+    const completedLogs = updated.filter(l => l.status === 'completed');
     const byType = completedLogs.reduce((acc, l) => {
-      const bucket = (l.media_type === 'season' || l.media_type === 'episode')
-        ? 'show'
-        : l.media_type;
+      const bucket = (l.media_type === 'season' || l.media_type === 'episode') ? 'show' : l.media_type;
       acc[bucket] = (acc[bucket] || 0) + 1;
       return acc;
     }, {});
-    setStats({
-      total: completedLogs.length,
-      movie: byType.movie || 0,
-      show:  byType.show  || 0,
-      book:  byType.book  || 0,
-      game:  byType.game  || 0,
-    });
-
+    setLogs(updated);
+    setRecent(prev => prev.filter(l => l.id !== id));
+    setTop4(prev  => prev.filter(l => l.id !== id));
+    setStats({ total: completedLogs.length, movie: byType.movie || 0, show: byType.show || 0, book: byType.book || 0, game: byType.game || 0 });
     setDeletingId(null);
   };
 
@@ -158,19 +173,10 @@ export default function Profile() {
     try {
       const ext  = file.name.split('.').pop();
       const path = `${profile.id}/avatar.${ext}`;
-      
       if (path.includes('..')) throw new Error('Invalid path');
-      
-      const { error: uploadError } = await supabase.storage
-        .from('avatars')
-        .upload(path, file, { upsert: true });
-      
+      const { error: uploadError } = await supabase.storage.from('avatars').upload(path, file, { upsert: true });
       if (uploadError) throw uploadError;
-      
-      const { data: { publicUrl } } = supabase.storage
-        .from('avatars')
-        .getPublicUrl(path);
-      
+      const { data: { publicUrl } } = supabase.storage.from('avatars').getPublicUrl(path);
       await updateProfile({ avatar_url: publicUrl });
       invalidateProfile(profile.id);
       setAvatarUrl(publicUrl);
@@ -181,16 +187,12 @@ export default function Profile() {
     setUploadingAvatar(false);
   };
 
-  const openPicker = (slotIndex) => {
-    setPickerSlot(slotIndex);
-    setPickerSearch('');
-    setPickerOpen(true);
-  };
+  const openPicker = (slotIndex) => { setPickerSlot(slotIndex); setPickerSearch(''); setPickerOpen(true); };
 
   const pickLog = async (log) => {
-    const newTop4 = [...top4];
-    const existingIdx = newTop4.findIndex(l => l.id === log.id);
-    if (existingIdx !== -1) newTop4.splice(existingIdx, 1);
+    const newTop4   = [...top4];
+    const existing  = newTop4.findIndex(l => l.id === log.id);
+    if (existing !== -1) newTop4.splice(existing, 1);
     newTop4[pickerSlot] = log;
     const cleaned = newTop4.filter(Boolean).slice(0, 4);
     setTop4(cleaned);
@@ -208,17 +210,26 @@ export default function Profile() {
     catch (e) { console.error(e); }
   };
 
-  const filteredLogs   = logs.filter(l => l.status === activeTab);
-  const memberSince    = profile?.created_at
+  const filteredLogs  = logs.filter(l => l.status === activeTab);
+  const memberSince   = profile?.created_at
     ? new Date(profile.created_at).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
     : null;
-  const pickerResults  = logs.filter(l =>
+  const pickerResults = logs.filter(l =>
     l.title.toLowerCase().includes(pickerSearch.toLowerCase())
   );
 
   if (loading) return (
     <div className="profile-page page-wrapper">
       <div className="loading-center"><div className="spinner" /></div>
+    </div>
+  );
+
+  if (error) return (
+    <div className="profile-page page-wrapper">
+      <div className="error-state">
+        <p>Couldn't load your profile. Check your connection.</p>
+        <button className="retry-btn" onClick={loadProfileData}>Try Again</button>
+      </div>
     </div>
   );
 
@@ -230,18 +241,11 @@ export default function Profile() {
         <div className="profile-hero-content">
           <div className="profile-avatar-wrap">
             <label className="avatar-upload-label" title="Change profile picture">
-              <input type="file" accept="image/*" className="avatar-file-input"
-                onChange={handleAvatarChange} disabled={uploadingAvatar} />
-              {uploadingAvatar ? (
-                <div className="profile-avatar"><span className="avatar-spinner" /></div>
-              ) : (
-                <Avatar
-                  url={avatarUrl}
-                  username={profile?.username}
-                  size={76}
-                  className="profile-avatar"
-                />
-              )}
+              <input type="file" accept="image/*" className="avatar-file-input" onChange={handleAvatarChange} disabled={uploadingAvatar} />
+              {uploadingAvatar
+                ? <div className="profile-avatar"><span className="avatar-spinner" /></div>
+                : <Avatar url={avatarUrl} username={profile?.username} size={76} className="profile-avatar" />
+              }
               <div className="avatar-overlay"><span>✎</span></div>
             </label>
           </div>
@@ -255,8 +259,7 @@ export default function Profile() {
             <div className="profile-bio-wrap">
               {editingBio ? (
                 <div className="bio-editor">
-                  <textarea className="bio-input" value={bioInput}
-                    onChange={e => setBioInput(e.target.value)}
+                  <textarea className="bio-input" value={bioInput} onChange={e => setBioInput(e.target.value)}
                     maxLength={200} rows={3} placeholder="Write a short bio…" autoFocus />
                   <div className="bio-editor-actions">
                     <span className="bio-char">{bioInput.length}/200</span>
@@ -307,10 +310,7 @@ export default function Profile() {
                     <div className="top4-cover" onClick={() => openPicker(i)} title="Change">
                       {item.cover_url
                         ? <img src={item.cover_url} alt={item.title} />
-                        : <div className="top4-placeholder"
-                            style={{ borderTop: `3px solid ${TYPE_COLORS[item.media_type]}` }}>
-                            {item.title?.[0]}
-                          </div>
+                        : <div className="top4-placeholder" style={{ borderTop: `3px solid ${TYPE_COLORS[item.media_type]}` }}>{item.title?.[0]}</div>
                       }
                       <div className="top4-overlay"><span>✎</span></div>
                     </div>
@@ -338,31 +338,17 @@ export default function Profile() {
           </div>
           <div className="recent-grid">
             {recent.map(log => (
-              <Link
-                key={log.id}
-                to={`/media/${log.media_id}`}
-                state={{ media: log }}
-              >
-                <div
-                  className="recent-item"
-                  title={`${log.title}${log.rating ? ` · ${log.rating} ★` : ''}`}
-                >
+              <Link key={log.id} to={`/media/${log.media_id}`} state={{ media: log }}>
+                <div className="recent-item" title={`${log.title}${log.rating ? ` · ${log.rating} ★` : ''}`}>
                   {log.cover_url
                     ? <img src={log.cover_url} alt={log.title} loading="lazy" />
-                    : <div
-                        className="recent-placeholder"
-                        style={{ borderTop: `3px solid ${TYPE_COLORS[log.media_type]}` }}
-                      >
-                        {log.title?.[0]}
-                      </div>
+                    : <div className="recent-placeholder" style={{ borderTop: `3px solid ${TYPE_COLORS[log.media_type]}` }}>{log.title?.[0]}</div>
                   }
-
                   {typeof log.rating === 'number' && (
                     <div className="recent-rating" style={{ display: 'inline-flex', gap: '2px', paddingBottom: '4px' }}>
                       <RatingStars rating={log.rating} size={12} />
                     </div>
                   )}
-
                   <div className="recent-type-dot" style={{ background: TYPE_COLORS[log.media_type] }} />
                 </div>
               </Link>
@@ -377,9 +363,7 @@ export default function Profile() {
           {TABS.map(t => {
             const count = logs.filter(l => l.status === t.key).length;
             return (
-              <button key={t.key}
-                className={`tab-btn ${activeTab === t.key ? 'active' : ''}`}
-                onClick={() => setActiveTab(t.key)}>
+              <button key={t.key} className={`tab-btn ${activeTab === t.key ? 'active' : ''}`} onClick={() => setActiveTab(t.key)}>
                 {t.label}
                 {count > 0 && <span className="tab-count">{count}</span>}
               </button>
@@ -389,19 +373,14 @@ export default function Profile() {
         <div className="log-list">
           {filteredLogs.length === 0 ? (
             <div className="empty-state">
-              <p>{activeTab === 'completed' ? 'No completed entries yet.'
-                : activeTab === 'in_progress' ? 'Nothing in progress.'
-                : 'Your watchlist is empty.'}</p>
+              <p>{activeTab === 'completed' ? 'No completed entries yet.' : activeTab === 'in_progress' ? 'Nothing in progress.' : 'Your watchlist is empty.'}</p>
             </div>
           ) : filteredLogs.map(log => (
             <article key={log.id} className="log-entry fade-in">
               <div className="log-cover">
                 {log.cover_url
                   ? <img src={log.cover_url} alt={log.title} loading="lazy" />
-                  : <div className="log-cover-placeholder"
-                      style={{ borderTop: `2px solid ${TYPE_COLORS[log.media_type]}` }}>
-                      {log.title?.[0]}
-                    </div>
+                  : <div className="log-cover-placeholder" style={{ borderTop: `2px solid ${TYPE_COLORS[log.media_type]}` }}>{log.title?.[0]}</div>
                 }
               </div>
               <div className="log-body">
@@ -410,18 +389,15 @@ export default function Profile() {
                     <h3 className="log-title">{log.title}</h3>
                     {log.year && <span className="log-year">{log.year}</span>}
                   </div>
-                  <span className="log-type-badge"
-                    style={{ color: TYPE_COLORS[log.media_type], borderColor: TYPE_COLORS[log.media_type] + '40' }}>
-                    {log.media_type}
+                  <span className="log-type-badge" style={{ color: TYPE_COLORS[log.media_type], borderColor: TYPE_COLORS[log.media_type] + '40' }}>
+                    {TYPE_LABELS[log.media_type] || log.media_type}
                   </span>
                 </div>
                 {log.creator && <p className="log-creator">{log.creator}</p>}
-                {log.rating ? <RatingStars rating={log.rating} readOnly size="sm" /> : null}
-                {log.review && <p className="log-review">"{log.review}"</p>}
+                {log.rating  ? <RatingStars rating={log.rating} readOnly size="sm" /> : null}
+                {log.review  && <p className="log-review">"{log.review}"</p>}
                 <div className="log-footer">
-                  <span className="log-date">
-                    {new Date(log.logged_at).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })}
-                  </span>
+                  <span className="log-date">{new Date(log.logged_at).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })}</span>
                   <button className="log-delete" onClick={() => deleteLog(log.id)} disabled={deletingId === log.id}>
                     {deletingId === log.id ? '…' : 'Remove'}
                   </button>
@@ -441,8 +417,7 @@ export default function Profile() {
               <h3 className="picker-title">Pick for slot {pickerSlot + 1}</h3>
               <button className="picker-close" onClick={() => setPickerOpen(false)}>✕</button>
             </div>
-            <input className="picker-search" placeholder="Search your logs…"
-              value={pickerSearch} onChange={e => setPickerSearch(e.target.value)} autoFocus />
+            <input className="picker-search" placeholder="Search your logs…" value={pickerSearch} onChange={e => setPickerSearch(e.target.value)} autoFocus />
             <div className="picker-grid">
               {pickerResults.length === 0
                 ? <p className="picker-empty">No results</p>
@@ -452,10 +427,7 @@ export default function Profile() {
                     onClick={() => pickLog(log)} title={log.title}>
                     {log.cover_url
                       ? <img src={log.cover_url} alt={log.title} loading="lazy" />
-                      : <div className="picker-placeholder"
-                          style={{ borderTop: `3px solid ${TYPE_COLORS[log.media_type]}` }}>
-                          {log.title?.[0]}
-                        </div>
+                      : <div className="picker-placeholder" style={{ borderTop: `3px solid ${TYPE_COLORS[log.media_type]}` }}>{log.title?.[0]}</div>
                     }
                     <div className="picker-item-title">{log.title}</div>
                     {top4.some(t => t.id === log.id) && <div className="picker-check">✓</div>}
