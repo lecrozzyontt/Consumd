@@ -1,5 +1,4 @@
-import { useState } from 'react';
-import { flushSync } from 'react-dom';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../services/supabase';
@@ -22,12 +21,29 @@ export default function Settings() {
   const [changingPw, setChangingPw]           = useState(false);
   const [pwError, setPwError]                 = useState('');
   const [pwSuccess, setPwSuccess]             = useState('');
+  const changingPwRef = useRef(false);
 
   // ── Delete Account ──
   const [deletePassword, setDeletePassword]       = useState('');
   const [deleting, setDeleting]                   = useState(false);
   const [deleteError, setDeleteError]             = useState('');
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+
+  // Listen for USER_UPDATED — this fires reliably when updateUser() succeeds
+  // on Supabase's side, even when the HTTP promise itself hangs.
+  useEffect(() => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
+      if (event === 'USER_UPDATED' && changingPwRef.current) {
+        changingPwRef.current = false;
+        setChangingPw(false);
+        setPwSuccess('Password updated successfully.');
+        setCurrentPassword('');
+        setNewPassword('');
+        setConfirmPassword('');
+      }
+    });
+    return () => subscription.unsubscribe();
+  }, []);
 
   // ── Save username ──
   const handleSave = async (e) => {
@@ -65,35 +81,28 @@ export default function Settings() {
     }
 
     setChangingPw(true);
-    try {
-      // Verify current password first
-      const { error: signInError } = await supabase.auth.signInWithPassword({
-        email: user.email,
-        password: currentPassword,
-      });
-      if (signInError) {
-        setPwError('Current password is incorrect.');
-        setChangingPw(false);
-        return;
-      }
+    changingPwRef.current = true;
 
-      // Update to new password
-      const { error: updateError } = await supabase.auth.updateUser({
-        password: newPassword,
-      });
-      if (updateError) throw updateError;
+    // Verify current password first
+    const { error: signInError } = await supabase.auth.signInWithPassword({
+      email: user.email,
+      password: currentPassword,
+    });
+    if (signInError) {
+      changingPwRef.current = false;
+      setPwError('Current password is incorrect.');
+      setChangingPw(false);
+      return;
+    }
 
-      // flushSync forces React to paint this immediately before the
-      // auth state change from updateUser can batch over it.
-      flushSync(() => {
-        setChangingPw(false);
-        setPwSuccess('Password updated successfully.');
-        setCurrentPassword('');
-        setNewPassword('');
-        setConfirmPassword('');
-      });
-    } catch (err) {
-      setPwError(err.message || 'Failed to change password.');
+    // Fire updateUser — success is handled by the USER_UPDATED listener above.
+    // We only check for hard errors here (e.g. session expired).
+    const { error: updateError } = await supabase.auth.updateUser({
+      password: newPassword,
+    });
+    if (updateError) {
+      changingPwRef.current = false;
+      setPwError(updateError.message || 'Failed to change password.');
       setChangingPw(false);
     }
   };
@@ -105,7 +114,6 @@ export default function Settings() {
     setDeleting(true);
 
     try {
-      // Verify password first
       const { error: signInError } = await supabase.auth.signInWithPassword({
         email: user.email,
         password: deletePassword,

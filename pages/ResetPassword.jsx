@@ -1,5 +1,4 @@
-import { useEffect, useState } from 'react';
-import { flushSync } from 'react-dom';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../services/supabase';
 import './Auth.css';
@@ -12,25 +11,39 @@ export default function ResetPassword() {
   const [sessionReady, setSessionReady] = useState(false);
   const [done, setDone] = useState(false);
 
+  // Track whether a submit is in-flight so the USER_UPDATED listener
+  // knows it was triggered by this form and not some other update.
+  const submitting = useRef(false);
+
   const navigate = useNavigate();
 
-  // Supabase fires PASSWORD_RECOVERY when the user lands via the reset link.
-  // The link contains the token in the URL hash, which the JS client
-  // exchanges for a short-lived session automatically.
   useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
-      if (event === 'PASSWORD_RECOVERY') {
-        setSessionReady(true);
-      }
-    });
-
-    // Also check if there's already an active session (e.g. after a page reload)
+    // Check for an existing session first (e.g. page reload)
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session) setSessionReady(true);
     });
 
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
+      if (event === 'PASSWORD_RECOVERY') {
+        setSessionReady(true);
+      }
+
+      // USER_UPDATED fires when updateUser() succeeds on Supabase's side.
+      // This event arrives reliably even when the HTTP promise itself hangs
+      // or never resolves — which is the real cause of the stuck spinner.
+      if (event === 'USER_UPDATED' && submitting.current) {
+        submitting.current = false;
+        setDone(true);
+        setLoading(false);
+        setTimeout(async () => {
+          await supabase.auth.signOut();
+          navigate('/auth');
+        }, 2000);
+      }
+    });
+
     return () => subscription.unsubscribe();
-  }, []);
+  }, [navigate]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -46,24 +59,14 @@ export default function ResetPassword() {
     }
 
     setLoading(true);
-    try {
-      const { error } = await supabase.auth.updateUser({ password });
-      if (error) throw error;
+    submitting.current = true;
 
-      // flushSync forces React to paint this state update immediately,
-      // before the auth state change from updateUser can trigger a re-render
-      // that would batch over it and leave the spinner stuck.
-      flushSync(() => {
-        setDone(true);
-        setLoading(false);
-      });
-
-      setTimeout(async () => {
-        await supabase.auth.signOut();
-        navigate('/auth');
-      }, 2000);
-    } catch (err) {
-      setError(err.message || 'Failed to update password. Your link may have expired.');
+    // We still await to catch hard errors (e.g. expired link),
+    // but success is handled by the USER_UPDATED listener above.
+    const { error } = await supabase.auth.updateUser({ password });
+    if (error) {
+      submitting.current = false;
+      setError(error.message || 'Failed to update password. Your link may have expired.');
       setLoading(false);
     }
   };
@@ -138,7 +141,6 @@ export default function ResetPassword() {
                 />
               </div>
 
-              {/* Live match indicator */}
               {confirm.length > 0 && (
                 <p className={`auth-match-hint ${password === confirm ? 'match' : 'no-match'}`}>
                   {password === confirm ? '✓ Passwords match' : '✗ Passwords do not match'}
