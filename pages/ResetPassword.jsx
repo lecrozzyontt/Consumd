@@ -48,13 +48,18 @@ export default function ResetPassword() {
     try {
       const { error } = await supabase.auth.updateUser({ password });
       if (error) throw error;
+
+      // Set done and clear loading BEFORE any async call so the UI
+      // updates immediately and isn't swallowed by an auth state change.
       setDone(true);
-      // Sign out so they log in fresh with the new password
-      await supabase.auth.signOut();
-      setTimeout(() => navigate('/auth'), 2500);
+      setLoading(false);
+
+      setTimeout(async () => {
+        await supabase.auth.signOut();
+        navigate('/auth');
+      }, 2000);
     } catch (err) {
-      setError(err.message || 'Failed to update password.');
-    } finally {
+      setError(err.message || 'Failed to update password. Your link may have expired.');
       setLoading(false);
     }
   };

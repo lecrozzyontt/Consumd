@@ -11,7 +11,7 @@ export default function Settings() {
   // ── Profile ──
   const [username, setUsername] = useState(profile?.username || '');
   const [saving, setSaving]     = useState(false);
-  const [profileError, setProfileError]   = useState('');
+  const [profileError, setProfileError]     = useState('');
   const [profileSuccess, setProfileSuccess] = useState('');
 
   // ── Change Password ──
@@ -23,9 +23,9 @@ export default function Settings() {
   const [pwSuccess, setPwSuccess]             = useState('');
 
   // ── Delete Account ──
-  const [deletePassword, setDeletePassword] = useState('');
-  const [deleting, setDeleting]             = useState(false);
-  const [deleteError, setDeleteError]       = useState('');
+  const [deletePassword, setDeletePassword]       = useState('');
+  const [deleting, setDeleting]                   = useState(false);
+  const [deleteError, setDeleteError]             = useState('');
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   // ── Save username ──
@@ -82,13 +82,15 @@ export default function Settings() {
       });
       if (updateError) throw updateError;
 
+      // Clear spinner and show success BEFORE anything else can
+      // cause a re-render (e.g. auth state change from updateUser).
+      setChangingPw(false);
       setPwSuccess('Password updated successfully.');
       setCurrentPassword('');
       setNewPassword('');
       setConfirmPassword('');
     } catch (err) {
       setPwError(err.message || 'Failed to change password.');
-    } finally {
       setChangingPw(false);
     }
   };
@@ -111,15 +113,13 @@ export default function Settings() {
         return;
       }
 
-      // Call the delete_user RPC (see SQL below in comments)
-      const { error: deleteError } = await supabase.rpc('delete_user');
-      if (deleteError) throw deleteError;
+      const { error: rpcError } = await supabase.rpc('delete_user');
+      if (rpcError) throw rpcError;
 
       await signOut();
       navigate('/auth');
     } catch (err) {
       setDeleteError(err.message || 'Failed to delete account. Please try again.');
-    } finally {
       setDeleting(false);
     }
   };
