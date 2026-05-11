@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { flushSync } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../services/supabase';
@@ -82,13 +83,15 @@ export default function Settings() {
       });
       if (updateError) throw updateError;
 
-      // Clear spinner and show success BEFORE anything else can
-      // cause a re-render (e.g. auth state change from updateUser).
-      setChangingPw(false);
-      setPwSuccess('Password updated successfully.');
-      setCurrentPassword('');
-      setNewPassword('');
-      setConfirmPassword('');
+      // flushSync forces React to paint this immediately before the
+      // auth state change from updateUser can batch over it.
+      flushSync(() => {
+        setChangingPw(false);
+        setPwSuccess('Password updated successfully.');
+        setCurrentPassword('');
+        setNewPassword('');
+        setConfirmPassword('');
+      });
     } catch (err) {
       setPwError(err.message || 'Failed to change password.');
       setChangingPw(false);

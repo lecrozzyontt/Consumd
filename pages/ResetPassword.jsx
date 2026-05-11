@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { flushSync } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../services/supabase';
 import './Auth.css';
@@ -49,10 +50,13 @@ export default function ResetPassword() {
       const { error } = await supabase.auth.updateUser({ password });
       if (error) throw error;
 
-      // Set done and clear loading BEFORE any async call so the UI
-      // updates immediately and isn't swallowed by an auth state change.
-      setDone(true);
-      setLoading(false);
+      // flushSync forces React to paint this state update immediately,
+      // before the auth state change from updateUser can trigger a re-render
+      // that would batch over it and leave the spinner stuck.
+      flushSync(() => {
+        setDone(true);
+        setLoading(false);
+      });
 
       setTimeout(async () => {
         await supabase.auth.signOut();
