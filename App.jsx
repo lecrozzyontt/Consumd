@@ -14,6 +14,7 @@ import MessagesPage from './pages/MessagesPage';
 import './styles/globals.css';
 import PublicProfile from './pages/PublicProfilePage';
 import GroupChatsPage from './pages/GroupChatsPage';
+import ResetPassword from './pages/ResetPassword';
 import CreateGroup from './pages/CreateGroup';
 
 function ProtectedRoute({ children }) {
@@ -54,6 +55,7 @@ function AppRoutes() {
           <Route path="/group-chats/:groupId" element={<ProtectedRoute><GroupChatsPage /></ProtectedRoute>} />
           <Route path="/create-group" element={<ProtectedRoute><CreateGroup /></ProtectedRoute>} />
           <Route path="*" element={<Navigate to="/" replace />} />
+          <Route path="/reset-password" element={<ResetPassword />} />
         </Routes>
       </main>
     </div>
