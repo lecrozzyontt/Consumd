@@ -62,7 +62,7 @@ export default function Home() {
 
   async function loadMedia() {
     if (!mounted.current) return;
-    if (!cacheGet('home:media')) setLoadingMedia(true);
+    setLoadingMedia(true);
     setMediaError(false);
     try {
       const [movies, shows, books, games] = await withTimeout(
@@ -89,7 +89,7 @@ export default function Home() {
 
   async function loadFriendsFeed(userId) {
     if (!mounted.current) return;
-    if (!cacheGet('home:feed')) setLoadingFeed(true);
+    setLoadingFeed(true);
     setFeedError(false);
     try {
       const { data: friendships, error: fErr } = await withTimeout(

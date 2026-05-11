@@ -277,6 +277,9 @@ h1, h2, h3 {
   }
 }
 
+/* ── Paste into Profile.css, Home.css, Discover.css, Social.css
+      or a shared stylesheet ── */
+
 .error-state {
   display: flex;
   flex-direction: column;
@@ -287,7 +290,7 @@ h1, h2, h3 {
   color: var(--text-muted, #888);
   font-size: 0.95rem;
 }
- 
+
 .retry-btn {
   padding: 10px 24px;
   border-radius: 999px;
@@ -299,7 +302,7 @@ h1, h2, h3 {
   cursor: pointer;
   transition: background 0.15s, color 0.15s;
 }
- 
+
 .retry-btn:hover,
 .retry-btn:active {
   background: var(--accent, #c9a84c);

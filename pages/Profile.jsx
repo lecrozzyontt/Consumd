@@ -93,7 +93,7 @@ export default function Profile() {
 
   async function loadProfileData() {
     if (!mounted.current || !profile) return;
-    if (!cacheGet('profile:' + profile.id)) setLoading(true);
+    setLoading(true);
     setError(false);
     try {
       await withTimeout(fetchProfileData());

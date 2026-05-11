@@ -222,7 +222,7 @@ export default function Social() {
   // ─── Social / Messages ───────────────────
   async function loadSocial() {
     if (!mounted.current) return;
-    if (!cacheGet('social:friends')) setLoadingMessages(true);
+    setLoadingMessages(true);
     setMessagesError(false);
 
     try {
@@ -281,7 +281,7 @@ export default function Social() {
   // ─── Threads ─────────────────────────────
   async function loadThreads() {
     if (!mounted.current) return;
-    if (!cacheGet('social:threads')) setLoadingThreads(true);
+    setLoadingThreads(true);
     setThreadsError(false);
 
     try {
