@@ -1,5 +1,7 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import { useEffect } from 'react';
+import { prefetchAll, resetPrefetch } from './services/prefetch';
 import Navbar from './components/Navbar';
 import Home from './pages/Home';
 import Discover from './pages/Discover';
@@ -14,7 +16,7 @@ import MessagesPage from './pages/MessagesPage';
 import './styles/globals.css';
 import PublicProfile from './pages/PublicProfilePage';
 import GroupChatsPage from './pages/GroupChatsPage';
-import ResetPassword from './pages/ResetPassword';
+import ScrollToTop from './components/ScrollToTop';
 import CreateGroup from './pages/CreateGroup';
 
 function ProtectedRoute({ children }) {
@@ -34,19 +36,30 @@ function ProtectedRoute({ children }) {
 function AppRoutes() {
   const { user } = useAuth();
 
+  useEffect(() => {
+    if (user) {
+      // Fire all API calls immediately after login — results land in cache
+      // so Home/Discover render instantly when the user navigates there
+      prefetchAll();
+    } else {
+      // Reset on logout so next login prefetches fresh
+      resetPrefetch();
+    }
+  }, [user?.id]);
+
   return (
     <div className="app-container">
       {user && <Navbar />}
       <main className={user ? 'main-content' : ''}>
         <Routes>
-          <Route path="/auth" element={user ? <Navigate to="/" replace /> : <Auth />} />
-          <Route path="/" element={<ProtectedRoute><Home /></ProtectedRoute>} />
+          <Route path="/auth"    element={user ? <Navigate to="/" replace /> : <Auth />} />
+          <Route path="/"        element={<ProtectedRoute><Home /></ProtectedRoute>} />
           <Route path="/discover" element={<ProtectedRoute><Discover /></ProtectedRoute>} />
-          <Route path="/social" element={<ProtectedRoute><Social /></ProtectedRoute>} />
+          <Route path="/social"  element={<ProtectedRoute><Social /></ProtectedRoute>} />
           <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
           <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
-          <Route path="/log" element={<ProtectedRoute><LogPage /></ProtectedRoute>} />
-          <Route path="/media" element={<ProtectedRoute><MediaDetailPage /></ProtectedRoute>} />
+          <Route path="/log"     element={<ProtectedRoute><LogPage /></ProtectedRoute>} />
+          <Route path="/media"   element={<ProtectedRoute><MediaDetailPage /></ProtectedRoute>} />
           <Route path="/media/:id" element={<ProtectedRoute><MediaDetailPage /></ProtectedRoute>} />
           <Route path="/review/:logId" element={<ProtectedRoute><ReviewDetailPage /></ProtectedRoute>} />
           <Route path="/messages/:friendId" element={<ProtectedRoute><MessagesPage /></ProtectedRoute>} />
@@ -55,19 +68,21 @@ function AppRoutes() {
           <Route path="/group-chats/:groupId" element={<ProtectedRoute><GroupChatsPage /></ProtectedRoute>} />
           <Route path="/create-group" element={<ProtectedRoute><CreateGroup /></ProtectedRoute>} />
           <Route path="*" element={<Navigate to="/" replace />} />
-          <Route path="/reset-password" element={<ResetPassword />} />
         </Routes>
       </main>
     </div>
   );
 }
 
-export default function App() {
+function App() {
   return (
     <Router>
+      <ScrollToTop />
       <AuthProvider>
         <AppRoutes />
       </AuthProvider>
     </Router>
   );
 }
+
+export default App;

@@ -4,8 +4,10 @@ const RAWG_KEY = import.meta.env.VITE_RAWG_API_KEY;
 const BASE     = 'https://api.rawg.io/api';
 
 async function rawg(path) {
-  const sep = path.includes('?') ? '&' : '?';
-  const res = await fetch(`${BASE}${path}${sep}key=${RAWG_KEY}`);
+  const sep      = path.includes('?') ? '&' : '?';
+  const finalUrl = new URL(`${BASE}${path}${sep}key=${RAWG_KEY}`);
+  if (finalUrl.hostname !== 'api.rawg.io') throw new Error('Invalid URL');
+  const res = await fetch(finalUrl.href);
   if (!res.ok) throw new Error(`RAWG error: ${res.status}`);
   return res.json();
 }
@@ -33,7 +35,10 @@ export async function fetchTrendingGames() {
     try {
       const data = await rawg('/games?ordering=-added&page_size=20');
       return data.results.map(formatGame);
-    } catch { return []; }
+    } catch (e) {
+      console.error('[RAWG] fetchTrendingGames failed:', e);
+      return [];
+    }
   }, { ttl: TRENDING_TTL });
 }
 
@@ -42,7 +47,10 @@ export async function fetchTopRatedGames() {
     try {
       const data = await rawg('/games?ordering=-rating&page_size=20');
       return data.results.map(formatGame);
-    } catch { return []; }
+    } catch (e) {
+      console.error('[RAWG] fetchTopRatedGames failed:', e);
+      return [];
+    }
   }, { ttl: TRENDING_TTL });
 }
 
@@ -52,7 +60,10 @@ export async function searchGames(query) {
     try {
       const data = await rawg(`/games?search=${encodeURIComponent(query)}&page_size=20`);
       return data.results.map(formatGame);
-    } catch { return []; }
+    } catch (e) {
+      console.error('[RAWG] searchGames failed:', e);
+      return [];
+    }
   }, { ttl: SEARCH_TTL });
 }
 
@@ -64,37 +75,36 @@ export async function fetchGameDetails(id) {
         rawg(`/games/${id}/screenshots`),
       ]);
 
-      // Strip HTML tags from description
       const description = data.description
         ? data.description.replace(/<[^>]*>/g, '').replace(/\n{3,}/g, '\n\n').trim()
         : '';
 
       return {
-        id:            `game_${data.id}`,
-        external_id:   String(data.id),
-        title:         data.name,
-        media_type:    'game',
-        cover_url:     data.background_image || null,
-        backdrop_url:  screenshots?.results?.[0]?.image || data.background_image || null,
-        overview:      description,
-        genres:        data.genres?.map(g => g.name) || [],
-        keywords:      data.tags?.filter(t => t.language === 'eng').map(t => t.name).slice(0, 12) || [],
-        year:          data.released?.slice(0, 4) || '',
-        release_date:  data.released || '',
-        rating_avg:    data.rating?.toFixed(1),
-        metacritic:    data.metacritic || null,
-        playtime:      data.playtime || null,
-        platforms:     data.platforms?.map(p => p.platform.name) || [],
-        developers:    data.developers?.map(d => d.name) || [],
-        publishers:    data.publishers?.map(p => p.name) || [],
-        creator:       data.developers?.[0]?.name || '',
-        esrb:          data.esrb_rating?.name || null,
-        website:       data.website || null,
-        screenshots:   screenshots?.results?.slice(0, 6).map(s => s.image) || [],
+        id:           `game_${data.id}`,
+        external_id:  String(data.id),
+        title:        data.name,
+        media_type:   'game',
+        cover_url:    data.background_image || null,
+        backdrop_url: screenshots?.results?.[0]?.image || data.background_image || null,
+        overview:     description,
+        genres:       data.genres?.map(g => g.name) || [],
+        keywords:     data.tags?.filter(t => t.language === 'eng').map(t => t.name).slice(0, 12) || [],
+        year:         data.released?.slice(0, 4) || '',
+        release_date: data.released || '',
+        rating_avg:   data.rating?.toFixed(1),
+        metacritic:   data.metacritic || null,
+        playtime:     data.playtime   || null,
+        platforms:    data.platforms?.map(p => p.platform.name) || [],
+        developers:   data.developers?.map(d => d.name) || [],
+        publishers:   data.publishers?.map(p => p.name) || [],
+        creator:      data.developers?.[0]?.name || '',
+        esrb:         data.esrb_rating?.name || null,
+        website:      data.website || null,
+        screenshots:  screenshots?.results?.slice(0, 6).map(s => s.image) || [],
       };
-    } catch (e) { console.error(e); return null; }
+    } catch (e) {
+      console.error('[RAWG] fetchGameDetails failed:', e);
+      return null;
+    }
   }, { ttl: DETAIL_TTL });
-  const finalUrl = new URL(`${BASE}${path}${sep}key=${RAWG_KEY}`, BASE);
-  if (finalUrl.hostname !== 'api.rawg.io') throw new Error('Invalid URL');
-  const res = await fetch(finalUrl.href);
 }
