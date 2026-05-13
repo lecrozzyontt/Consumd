@@ -2,6 +2,7 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
+
     <!--
       width=device-width      – match the physical screen width
       initial-scale=1.0       – no zoom on first load
@@ -15,8 +16,20 @@
       name="viewport"
       content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-visual"
     />
+
+    <!-- Smart App Banner -->
+    <meta
+      name="apple-itunes-app"
+      content="app-id=6766853911, app-argument=https://consumd.app"
+    />
+
     <title>Consumd</title>
-    <meta name="description" content="Your personal media archive — movies, shows, books, games." />
+
+    <meta
+      name="description"
+      content="Your personal media archive — movies, shows, books, games."
+    />
+
     <meta name="theme-color" content="#07070f" />
 
     <!-- ── PWA / Installability ─────────────────────────────────── -->
@@ -24,27 +37,39 @@
 
     <!-- ── iOS Safari PWA ───────────────────────────────────────── -->
     <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta
+      name="apple-mobile-web-app-status-bar-style"
+      content="black-translucent"
+    />
     <meta name="apple-mobile-web-app-title" content="Consumd" />
-
-    <meta name="apple-itunes-app" content="app-id=6766853911" />
 
     <!-- ── iOS Icons ────────────────────────────────────────────── -->
     <link rel="apple-touch-icon" href="/consumd-icon.jpg" />
 
     <!-- ── iOS Splash Screens ───────────────────────────────────── -->
-    <link rel="apple-touch-startup-image"
+    <link
+      rel="apple-touch-startup-image"
       href="/splash/apple-splash-640x1136.png"
-      media="(device-width: 320px) and (device-height: 568px) and (-webkit-device-pixel-ratio: 2)" />
-    <link rel="apple-touch-startup-image"
+      media="(device-width: 320px) and (device-height: 568px) and (-webkit-device-pixel-ratio: 2)"
+    />
+
+    <link
+      rel="apple-touch-startup-image"
       href="/splash/apple-splash-1125x2436.png"
-      media="(device-width: 375px) and (device-height: 812px) and (-webkit-device-pixel-ratio: 3)" />
-    <link rel="apple-touch-startup-image"
+      media="(device-width: 375px) and (device-height: 812px) and (-webkit-device-pixel-ratio: 3)"
+    />
+
+    <link
+      rel="apple-touch-startup-image"
       href="/splash/apple-splash-1290x2796.png"
-      media="(device-width: 430px) and (device-height: 932px) and (-webkit-device-pixel-ratio: 3)" />
-    <link rel="apple-touch-startup-image"
+      media="(device-width: 430px) and (device-height: 932px) and (-webkit-device-pixel-ratio: 3)"
+    />
+
+    <link
+      rel="apple-touch-startup-image"
       href="/splash/apple-splash-2048x2732.png"
-      media="(device-width: 1024px) and (device-height: 1366px) and (-webkit-device-pixel-ratio: 2)" />
+      media="(device-width: 1024px) and (device-height: 1366px) and (-webkit-device-pixel-ratio: 2)"
+    />
 
     <!-- ── Favicon ───────────────────────────────────────────────── -->
     <link rel="icon" type="image/jpeg" href="/consumd-icon.jpg" />
@@ -56,17 +81,30 @@
     <!-- ── Open Graph (for sharing links) ───────────────────────── -->
     <meta property="og:type" content="website" />
     <meta property="og:title" content="Consumd" />
-    <meta property="og:description" content="Your personal media archive — movies, shows, books, games." />
+    <meta
+      property="og:description"
+      content="Your personal media archive — movies, shows, books, games."
+    />
     <meta property="og:image" content="/consumd-icon.jpg" />
 
     <!-- ── Fonts ─────────────────────────────────────────────────── -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="preconnect"
+      href="https://fonts.gstatic.com"
+      crossorigin
+    />
   </head>
+
   <body>
     <div id="root"></div>
+
     <script type="module" src="/main.jsx"></script>
-    <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-2475918330633222"
-     crossorigin="anonymous"></script>
+
+    <script
+      async
+      src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-2475918330633222"
+      crossorigin="anonymous"
+    ></script>
   </body>
 </html>
